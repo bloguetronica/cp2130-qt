@@ -162,6 +162,23 @@ void CP2130::close()
     }
 }
 
+// Configures the pin mode and value for a given GPIO pin
+// Note that this function can override the GPIO pin modes programmed in the OTP ROM configuration
+void CP2130::configureGPIO(quint8 pin, quint8 mode, bool value,  int &errcnt, QString &errstr)
+{
+    if (pin > 10) {
+        errcnt += 1;
+        errstr.append(QObject::tr("In configureGPIO(): Pin number must be between 0 and 10.\n"));  // Program logic error
+    } else {
+        unsigned char controlBufferOut[3] = {
+            pin,   // Selected GPIO pin
+            mode,  // Pin mode (see the values applicable to PinConfig/getPinConfig()/writePinConfig())
+            value  // Output value (when applicable)
+        };
+        controlTransfer(SET, SET_GPIO_MODE_AND_LEVEL, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    }
+}
+
 // Configures delays for a given SPI channel
 void CP2130::configureSPIDelays(quint8 channel, const SPIDelays &delays, int &errcnt, QString &errstr)
 {

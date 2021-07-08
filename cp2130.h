@@ -121,9 +121,9 @@ public:
     static const bool CPHA1 = true;        // Boolean corresponding to CPHA = 1
 
     // The following values are applicable to PinConfig/getPinConfig()/writePinConfig()
-    static const quint8 PCIN = 0x00;         // GPIO as input
-    static const quint8 PCOUTOD = 0x01;      // GPIO as open-drain output
-    static const quint8 PCOUTPP = 0x02;      // GPIO as push-pull output
+    static const quint8 PCIN = 0x00;         // GPIO as input - Also applicable to configureGPIO()
+    static const quint8 PCOUTOD = 0x01;      // GPIO as open-drain output - Also applicable to configureGPIO()
+    static const quint8 PCOUTPP = 0x02;      // GPIO as push-pull output - Also applicable to configureGPIO()
     static const quint8 PCCS = 0x03;         // GPIO as chip select
     static const quint8 PCNRTR = 0x04;       // GPIO as !RTR input, only applicable to GPIO.3
     static const quint8 PCRTR = 0x05;        // GPIO as RTR input, only applicable to GPIO.3
@@ -243,6 +243,7 @@ public:
 
     void bulkTransfer(quint8 endpoint, unsigned char *data, int length, int *transferred, int &errcnt, QString &errstr);
     void close();
+    void configureGPIO(quint8 pin, quint8 mode, bool value, int &errcnt, QString &errstr);
     void configureSPIDelays(quint8 channel, const SPIDelays &delays, int &errcnt, QString &errstr);
     void configureSPIMode(quint8 channel, const SPIMode &mode, int &errcnt, QString &errstr);
     void controlTransfer(quint8 bmRequestType, quint8 bRequest, quint16 wValue, quint16 wIndex, unsigned char *data, quint16 wLength, int &errcnt, QString &errstr);
