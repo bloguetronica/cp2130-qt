@@ -127,19 +127,19 @@ bool CP2130::isOpen() const
 }
 
 // Safe bulk transfer
-void CP2130::bulkTransfer(quint8 endpoint, unsigned char *data, int length, int *transferred, int &errcnt, QString &errstr)
+void CP2130::bulkTransfer(quint8 endpointAddr, unsigned char *data, int length, int *transferred, int &errcnt, QString &errstr)
 {
     if (!isOpen()) {
         errcnt += 1;
         errstr.append(QObject::tr("In bulkTransfer(): device is not open.\n"));  // Program logic error
     } else {
-        int result = libusb_bulk_transfer(handle_, endpoint, data, length, transferred, TR_TIMEOUT);
+        int result = libusb_bulk_transfer(handle_, endpointAddr, data, length, transferred, TR_TIMEOUT);
         if (result != 0) {
             errcnt += 1;
-            if (endpoint < 0x80) {
-                errstr.append(QObject::tr("Failed bulk OUT transfer to endpoint %1 (address 0x%2).\n").arg(0x0F & endpoint).arg(endpoint, 2, 16, QChar('0')));
+            if (endpointAddr < 0x80) {
+                errstr.append(QObject::tr("Failed bulk OUT transfer to endpoint %1 (address 0x%2).\n").arg(0x0F & endpointAddr).arg(endpointAddr, 2, 16, QChar('0')));
             } else {
-                errstr.append(QObject::tr("Failed bulk IN transfer from endpoint %1 (address 0x%2).\n").arg(0x0F & endpoint).arg(endpoint, 2, 16, QChar('0')));
+                errstr.append(QObject::tr("Failed bulk IN transfer from endpoint %1 (address 0x%2).\n").arg(0x0F & endpointAddr).arg(endpointAddr, 2, 16, QChar('0')));
             }
             if (result == LIBUSB_ERROR_NO_DEVICE) {
                 disconnected_ = true;  // This reports that the device has been disconnected
@@ -276,6 +276,20 @@ void CP2130::enableCS(quint8 channel, int &errcnt, QString &errstr)
         };
         controlTransfer(SET, SET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
     }
+}
+
+// Returns the address of the endpoint assuming the IN direction
+quint8 CP2130::endpointInAddr(int &errcnt, QString &errstr)
+{
+    USBConfig usbConfig = getUSBConfig(errcnt, errstr);
+    return usbConfig.trfprio == PRIOWRITE ? 0x82 : 0x81;
+}
+
+// Returns the address of the endpoint assuming the OUT direction
+quint8 CP2130::endpointOutAddr(int &errcnt, QString &errstr)
+{
+    USBConfig usbConfig = getUSBConfig(errcnt, errstr);
+    return usbConfig.trfprio == PRIOWRITE ?  0x01 : 0x02;
 }
 
 // Returns the current clock divider value

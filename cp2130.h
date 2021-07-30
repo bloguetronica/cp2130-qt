@@ -241,7 +241,7 @@ public:
     bool disconnected() const;
     bool isOpen() const;
 
-    void bulkTransfer(quint8 endpoint, unsigned char *data, int length, int *transferred, int &errcnt, QString &errstr);
+    void bulkTransfer(quint8 endpointAddr, unsigned char *data, int length, int *transferred, int &errcnt, QString &errstr);
     void close();
     void configureGPIO(quint8 pin, quint8 mode, bool value, int &errcnt, QString &errstr);
     void configureSPIDelays(quint8 channel, const SPIDelays &delays, int &errcnt, QString &errstr);
@@ -250,6 +250,8 @@ public:
     void disableCS(quint8 channel, int &errcnt, QString &errstr);
     void disableSPIDelays(quint8 channel, int &errcnt, QString &errstr);
     void enableCS(quint8 channel, int &errcnt, QString &errstr);
+    quint8 endpointInAddr(int &errcnt, QString &errstr);
+    quint8 endpointOutAddr(int &errcnt, QString &errstr);
     quint8 getClockDivider(int &errcnt, QString &errstr);
     bool getCS(quint8 channel, int &errcnt, QString &errstr);
     EventCounter getEventCounter(int &errcnt, QString &errstr);
