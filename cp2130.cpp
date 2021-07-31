@@ -289,7 +289,7 @@ quint8 CP2130::endpointInAddr(int &errcnt, QString &errstr)
 quint8 CP2130::endpointOutAddr(int &errcnt, QString &errstr)
 {
     USBConfig usbConfig = getUSBConfig(errcnt, errstr);
-    return usbConfig.trfprio == PRIOWRITE ?  0x01 : 0x02;
+    return usbConfig.trfprio == PRIOWRITE ? 0x01 : 0x02;
 }
 
 // Returns the current clock divider value
