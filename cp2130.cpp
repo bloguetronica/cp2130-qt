@@ -505,6 +505,20 @@ QString CP2130::getProductDesc(int &errcnt, QString &errstr)
     return product;
 }
 
+// Gets the entire CP2130 OTP ROM content as a structure of eight 64-byte blocks
+CP2130::PROMConfig CP2130::getPROMConfig(int &errcnt, QString &errstr)
+{
+    PROMConfig config;
+    for (size_t i = 0; i < PROM_BLOCKS; ++i) {
+        unsigned char controlBufferIn[PROM_BLOCKSIZE];
+        controlTransfer(GET, GET_PROM_CONFIG, 0x0000, static_cast<quint16>(i), controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+        for (size_t j = 0; j < PROM_BLOCKSIZE; ++j) {
+            config.blocks[i][j] = controlBufferIn[j];
+        }
+    }
+    return config;
+}
+
 // Gets the serial descriptor from the CP2130 OTP ROM
 QString CP2130::getSerialDesc(int &errcnt, QString &errstr)
 {

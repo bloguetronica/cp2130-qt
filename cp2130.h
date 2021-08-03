@@ -35,12 +35,14 @@ private:
 
 public:
     // Class definitions
-    static const quint16 VID = 0x10C4;             // Default USB vendor ID
-    static const quint16 PID = 0x87A0;             // Default USB product ID
-    static const int SUCCESS = 0;                  // Returned by open() if successful
-    static const int ERROR_INIT = 1;               // Returned by open() in case of a libusb initialization failure
-    static const int ERROR_NOT_FOUND = 2;          // Returned by open() if the device was not found
-    static const int ERROR_BUSY = 3;               // Returned by open() if the device is already in use
+    static const quint16 VID = 0x10C4;        // Default USB vendor ID
+    static const quint16 PID = 0x87A0;        // Default USB product ID
+    static const int SUCCESS = 0;             // Returned by open() if successful
+    static const int ERROR_INIT = 1;          // Returned by open() in case of a libusb initialization failure
+    static const int ERROR_NOT_FOUND = 2;     // Returned by open() if the device was not found
+    static const int ERROR_BUSY = 3;          // Returned by open() if the device is already in use
+    static const size_t PROM_BLOCKS = 8;      // Number of blocks of the OTP ROM
+    static const size_t PROM_BLOCKSIZE = 64;  // Size of each block
 
     // The following values are applicable to bulkTransfer()
     static const quint8 READ = 0x00;         // Read command
@@ -191,6 +193,10 @@ public:
         bool operator !=(const PinConfig &other) const;
     };
 
+    struct PROMConfig {
+        quint8 blocks[PROM_BLOCKS][PROM_BLOCKSIZE];
+    };
+
     struct SiliconVersion {
         quint8 maj;  // Major read-only version
         quint8 min;  // Minor read-only version
@@ -272,6 +278,7 @@ public:
     QString getManufacturerDesc(int &errcnt, QString &errstr);
     PinConfig getPinConfig(int &errcnt, QString &errstr);
     QString getProductDesc(int &errcnt, QString &errstr);
+    PROMConfig getPROMConfig(int &errcnt, QString &errstr);
     QString getSerialDesc(int &errcnt, QString &errstr);
     SiliconVersion getSiliconVersion(int &errcnt, QString &errstr);
     SPIDelays getSPIDelays(quint8 channel, int &errcnt, QString &errstr);
