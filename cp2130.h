@@ -194,7 +194,7 @@ public:
     };
 
     struct PROMConfig {
-        quint8 blocks[PROM_BLOCKS][PROM_BLOCKSIZE];
+        quint8 blocks[PROM_BLOCKS][PROM_BLOCKSIZE];  // OTP ROM blocks
     };
 
     struct SiliconVersion {
