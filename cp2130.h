@@ -195,6 +195,11 @@ public:
 
     struct PROMConfig {
         quint8 blocks[PROM_BLOCKS][PROM_BLOCKSIZE];  // OTP ROM blocks
+
+        bool operator ==(const PROMConfig &other) const;
+        bool operator !=(const PROMConfig &other) const;
+        quint8 &operator [](size_t index);
+        const quint8 &operator [](size_t index) const;
     };
 
     struct SiliconVersion {

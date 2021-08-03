@@ -53,6 +53,39 @@ bool CP2130::PinConfig::operator !=(const CP2130::PinConfig &other) const
     return !(operator ==(other));
 }
 
+// "Equal to" operator for PROMConfig
+bool CP2130::PROMConfig::operator ==(const CP2130::PROMConfig &other) const
+{
+    bool retval = true;
+    for (size_t i = 0; i < PROM_BLOCKS; ++i) {
+        for (size_t j = 0; j < PROM_BLOCKSIZE; ++j) {
+            if (blocks[i][j] != other.blocks[i][j]) {
+                retval = false;
+                break;
+            }
+        }
+    }
+    return retval;
+}
+
+// "Not equal to" operator for PROMConfig
+bool CP2130::PROMConfig::operator !=(const CP2130::PROMConfig &other) const
+{
+    return !(operator ==(other));
+}
+
+// Subscript operator for access to PROMConfig as a contiguous 512-byte block
+quint8 &CP2130::PROMConfig::operator [](size_t index)
+{
+    return blocks[index / PROM_BLOCKSIZE][index % PROM_BLOCKSIZE];
+}
+
+// Const version of the previous subscript operator
+const quint8 &CP2130::PROMConfig::operator [](size_t index) const  // For correct error reporting and easy debugging, this operator returns a const reference instead of a value
+{
+    return blocks[index / PROM_BLOCKSIZE][index % PROM_BLOCKSIZE];
+}
+
 // "Equal to" operator for SiliconVersion
 bool CP2130::SiliconVersion::operator ==(const CP2130::SiliconVersion &other) const
 {
