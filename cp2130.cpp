@@ -74,7 +74,7 @@ bool CP2130::PROMConfig::operator !=(const CP2130::PROMConfig &other) const
     return !(operator ==(other));
 }
 
-// Subscript operator for access to PROMConfig as a single 512-byte block
+// Subscript operator for accessing PROMConfig as a single 512-byte block
 quint8 &CP2130::PROMConfig::operator [](size_t index)
 {
     return blocks[index / PROM_BLOCKSIZE][index % PROM_BLOCKSIZE];
