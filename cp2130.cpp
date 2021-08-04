@@ -58,7 +58,7 @@ bool CP2130::PROMConfig::operator ==(const CP2130::PROMConfig &other) const
 {
     bool retval = true;
     for (size_t i = 0; i < PROM_BLOCKS; ++i) {
-        for (size_t j = 0; j < PROM_BLOCKSIZE; ++j) {
+        for (size_t j = 0; j < PROM_BLOCK_SIZE; ++j) {
             if (blocks[i][j] != other.blocks[i][j]) {
                 retval = false;
                 break;
@@ -77,13 +77,13 @@ bool CP2130::PROMConfig::operator !=(const CP2130::PROMConfig &other) const
 // Subscript operator for accessing PROMConfig as a single 512-byte block
 quint8 &CP2130::PROMConfig::operator [](size_t index)
 {
-    return blocks[index / PROM_BLOCKSIZE][index % PROM_BLOCKSIZE];
+    return blocks[index / PROM_BLOCK_SIZE][index % PROM_BLOCK_SIZE];
 }
 
 // Const version of the previous subscript operator
 const quint8 &CP2130::PROMConfig::operator [](size_t index) const  // For correct error reporting and easy debugging, this operator returns a const reference instead of a value
 {
-    return blocks[index / PROM_BLOCKSIZE][index % PROM_BLOCKSIZE];
+    return blocks[index / PROM_BLOCK_SIZE][index % PROM_BLOCK_SIZE];
 }
 
 // "Equal to" operator for SiliconVersion
@@ -543,9 +543,9 @@ CP2130::PROMConfig CP2130::getPROMConfig(int &errcnt, QString &errstr)
 {
     PROMConfig config;
     for (size_t i = 0; i < PROM_BLOCKS; ++i) {
-        unsigned char controlBufferIn[PROM_BLOCKSIZE];
+        unsigned char controlBufferIn[PROM_BLOCK_SIZE];
         controlTransfer(GET, GET_PROM_CONFIG, 0x0000, static_cast<quint16>(i), controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-        for (size_t j = 0; j < PROM_BLOCKSIZE; ++j) {
+        for (size_t j = 0; j < PROM_BLOCK_SIZE; ++j) {
             config.blocks[i][j] = controlBufferIn[j];
         }
     }

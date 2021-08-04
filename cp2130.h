@@ -35,14 +35,45 @@ private:
 
 public:
     // Class definitions
-    static const quint16 VID = 0x10C4;        // Default USB vendor ID
-    static const quint16 PID = 0x87A0;        // Default USB product ID
-    static const int SUCCESS = 0;             // Returned by open() if successful
-    static const int ERROR_INIT = 1;          // Returned by open() in case of a libusb initialization failure
-    static const int ERROR_NOT_FOUND = 2;     // Returned by open() if the device was not found
-    static const int ERROR_BUSY = 3;          // Returned by open() if the device is already in use
-    static const size_t PROM_BLOCKS = 8;      // Number of blocks of the OTP ROM
-    static const size_t PROM_BLOCKSIZE = 64;  // Size of each block
+    static const quint16 VID = 0x10C4;     // Default USB vendor ID
+    static const quint16 PID = 0x87A0;     // Default USB product ID
+    static const int SUCCESS = 0;          // Returned by open() if successful
+    static const int ERROR_INIT = 1;       // Returned by open() in case of a libusb initialization failure
+    static const int ERROR_NOT_FOUND = 2;  // Returned by open() if the device was not found
+    static const int ERROR_BUSY = 3;       // Returned by open() if the device is already in use
+
+    // OTP ROM specific definitions
+    static const size_t PROM_BLOCKS = 8;                            // Number of blocks of the OTP ROM
+    static const size_t PROM_BLOCK_SIZE = 64;                       // Size of each block
+    static const size_t PROM_SIZE = PROM_BLOCKS * PROM_BLOCK_SIZE;  // Total size of the OTP ROM
+    static const size_t PROMIDX_VID = 0;                            // 'VID' field index
+    static const size_t PROMSZE_VID = 2;                            // 'VID' field size
+    static const size_t PROMIDX_PID = 2;                            // 'PID' field index
+    static const size_t PROMSZE_PID = 2;                            // 'PID' field size
+    static const size_t PROMIDX_MAX_POWER = 4;                      // 'Max Power' field index
+    static const size_t PROMSZE_MAX_POWER = 1;                      // 'Max Power' field size
+    static const size_t PROMIDX_POWER_MODE = 5;                     // 'Power Mode' field index
+    static const size_t PROMSZE_POWER_MODE = 1;                     // 'Power Mode' field size
+    static const size_t PROMIDX_RELEASE_VERSION = 6;                // 'Release Version' field index
+    static const size_t PROMSZE_RELEASE_VERSION = 2;                // 'Release Version' field size
+    static const size_t PROMIDX_TRANSFER_PRIORITY = 8;              // 'Transfer Priority' field index
+    static const size_t PROMSZE_TRANSFER_PRIORITY = 1;              // 'Transfer Priority' field size
+    static const size_t PROMIDX_MANUFACTURING_STRING_1 = 9;         // 'Manufacturing String 1' field index
+    static const size_t PROMSZE_MANUFACTURING_STRING_1 = 63;        // 'Manufacturing String 1' field size
+    static const size_t PROMIDX_MANUFACTURING_STRING_2 = 72;        // 'Manufacturing String 2' field index
+    static const size_t PROMSZE_MANUFACTURING_STRING_2 = 63;        // 'Manufacturing String 2' field size
+    static const size_t PROMIDX_PRODUCT_STRING_1 = 135;             // 'Product String 1' field index
+    static const size_t PROMSZE_PRODUCT_STRING_1 = 63;              // 'Product String 1' field size
+    static const size_t PROMIDX_PRODUCT_STRING_2 = 198;             // 'Product String 2' field index
+    static const size_t PROMSZE_PRODUCT_STRING_2 = 63;              // 'Product String 2' field size
+    static const size_t PROMIDX_SERIAL_STRING = 261;                // 'Serial String' field index
+    static const size_t PROMSZE_SERIAL_STRING = 62;                 // 'Serial String' field size
+    static const size_t PROMIDX_PIN_CONFIG = 324;                   // 'Pin Config' field index
+    static const size_t PROMSZE_PIN_CONFIG = 20;                    // 'Pin Config' field size
+    static const size_t PROMIDX_CUSTOMIZED_FIELDS = 344;            // Customized fields index
+    static const size_t PROMSZE_CUSTOMIZED_FIELDS = 2;              // Customized fields size
+    static const size_t PROMIDX_LOCK_BYTE = 346;                    // 'Lock Byte' field index
+    static const size_t PROMSZE_LOCK_BYTE = 2;                      // 'Lock Byte' field size
 
     // The following values are applicable to bulkTransfer()
     static const quint8 READ = 0x00;         // Read command
@@ -194,7 +225,7 @@ public:
     };
 
     struct PROMConfig {
-        quint8 blocks[PROM_BLOCKS][PROM_BLOCKSIZE];  // OTP ROM blocks
+        quint8 blocks[PROM_BLOCKS][PROM_BLOCK_SIZE];  // OTP ROM blocks
 
         bool operator ==(const PROMConfig &other) const;
         bool operator !=(const PROMConfig &other) const;
