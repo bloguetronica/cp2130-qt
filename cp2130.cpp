@@ -314,15 +314,13 @@ void CP2130::enableCS(quint8 channel, int &errcnt, QString &errstr)
 // Returns the address of the endpoint assuming the IN direction
 quint8 CP2130::endpointInAddr(int &errcnt, QString &errstr)
 {
-    USBConfig usbConfig = getUSBConfig(errcnt, errstr);
-    return usbConfig.trfprio == PRIOWRITE ? 0x82 : 0x81;
+    return getUSBConfig(errcnt, errstr).trfprio == PRIOWRITE ? 0x82 : 0x81;
 }
 
 // Returns the address of the endpoint assuming the OUT direction
 quint8 CP2130::endpointOutAddr(int &errcnt, QString &errstr)
 {
-    USBConfig usbConfig = getUSBConfig(errcnt, errstr);
-    return usbConfig.trfprio == PRIOWRITE ? 0x01 : 0x02;
+    return getUSBConfig(errcnt, errstr).trfprio == PRIOWRITE ? 0x01 : 0x02;
 }
 
 // Returns the current clock divider value
