@@ -46,6 +46,7 @@ public:
     static const size_t PROM_BLOCKS = 8;                            // Number of blocks of the OTP ROM
     static const size_t PROM_BLOCK_SIZE = 64;                       // Size of each block
     static const size_t PROM_SIZE = PROM_BLOCKS * PROM_BLOCK_SIZE;  // Total size of the OTP ROM
+    static const quint16 PROM_WRITE_KEY = 0xA5F1;                   // OTP ROM write key
     static const size_t PROMIDX_VID = 0;                            // 'VID' field index
     static const size_t PROMSZE_VID = 2;                            // 'VID' field size
     static const size_t PROMIDX_PID = 2;                            // 'PID' field index
@@ -347,6 +348,7 @@ public:
     void writeManufacturerDesc(const QString &manufacturer, int &errcnt, QString &errstr);
     void writePinConfig(const PinConfig &config, int &errcnt, QString &errstr);
     void writeProductDesc(const QString &product, int &errcnt, QString &errstr);
+    void writePROMConfig(const PROMConfig &config, int &errcnt, QString &errstr);
     void writeSerialDesc(const QString &serial, int &errcnt, QString &errstr);
     void writeUSBConfig(const USBConfig &config, quint8 mask, int &errcnt, QString &errstr);
 

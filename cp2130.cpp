@@ -26,7 +26,6 @@ extern "C" {
 }
 
 // Definitions
-const quint16 MEM_KEY = 0xA5F1;       // OTP ROM write key
 const unsigned int TR_TIMEOUT = 100;  // Transfer timeout in milliseconds
 
 // "Equal to" operator for EventCounter
@@ -835,7 +834,7 @@ void CP2130::writeLockWord(quint16 word, int &errcnt, QString &errstr)
     unsigned char controlBufferOut[2] = {
         static_cast<quint8>(word), static_cast<quint8>(word >> 8)  // Sets both lock bytes to the intended value
     };
-    controlTransfer(SET, SET_LOCK_BYTE, MEM_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_LOCK_BYTE, PROM_WRITE_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
 }
 
 // Writes the manufacturer descriptor to the CP2130 OTP ROM
@@ -860,7 +859,7 @@ void CP2130::writeManufacturerDesc(const QString &manufacturer, int &errcnt, QSt
             }
         }
         controlBufferOut[bufsize - 1] = 0x00;  // The last byte of the first table is reserved, so it should be set to zero
-        controlTransfer(SET, SET_MANUFACTURING_STRING_1, MEM_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        controlTransfer(SET, SET_MANUFACTURING_STRING_1, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
         for (int i = 0; i < bufsize; ++i)
         {
             if (i < length - 63) {
@@ -869,7 +868,7 @@ void CP2130::writeManufacturerDesc(const QString &manufacturer, int &errcnt, QSt
                 controlBufferOut[i] = 0x00;  // Note that, inherently, the last byte of the second table will always be set to zero
             }
         }
-        controlTransfer(SET, SET_MANUFACTURING_STRING_2, MEM_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        controlTransfer(SET, SET_MANUFACTURING_STRING_2, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
     }
 }
 
@@ -894,7 +893,7 @@ void CP2130::writePinConfig(const PinConfig &config, int &errcnt, QString &errst
         static_cast<quint8>(0x7F & config.wkupmatch >> 8), static_cast<quint8>(config.wkupmatch),  // Wakeup pin match bitmap
         config.divider                                                                             // Clock divider
     };
-    controlTransfer(SET, SET_PIN_CONFIG, MEM_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_PIN_CONFIG, PROM_WRITE_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
 }
 
 // Writes the product descriptor to the CP2130 OTP ROM
@@ -919,7 +918,7 @@ void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errs
             }
         }
         controlBufferOut[bufsize - 1] = 0x00;  // The last byte of the first table is reserved, so it should be set to zero
-        controlTransfer(SET, SET_PRODUCT_STRING_1, MEM_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        controlTransfer(SET, SET_PRODUCT_STRING_1, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
         for (int i = 0; i < bufsize; ++i)
         {
             if (i < length - 63) {
@@ -928,7 +927,19 @@ void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errs
                 controlBufferOut[i] = 0x00;  // Note that, inherently, the last byte of the second table will always be set to zero
             }
         }
-        controlTransfer(SET, SET_PRODUCT_STRING_2, MEM_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        controlTransfer(SET, SET_PRODUCT_STRING_2, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+    }
+}
+
+// Writes the entire CP2130 OTP ROM
+void CP2130::writePROMConfig(const PROMConfig &config, int &errcnt, QString &errstr)
+{
+    for (size_t i = 0; i < PROM_BLOCKS; ++i) {
+        unsigned char controlBufferOut[PROM_BLOCK_SIZE];
+        for (size_t j = 0; j < PROM_BLOCK_SIZE; ++j) {
+            controlBufferOut[j] = config.blocks[i][j];
+        }
+        controlTransfer(SET, SET_PROM_CONFIG, PROM_WRITE_KEY, static_cast<quint16>(i), controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
     }
 }
 
@@ -952,7 +963,7 @@ void CP2130::writeSerialDesc(const QString &serial, int &errcnt, QString &errstr
                 controlBufferOut[i] = 0x00;  // Note that, inherently, the last two bytes will always be set to zero
             }
         }
-        controlTransfer(SET, SET_SERIAL_STRING, MEM_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        controlTransfer(SET, SET_SERIAL_STRING, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
     }
 }
 
@@ -968,7 +979,7 @@ void CP2130::writeUSBConfig(const USBConfig &config, quint8 mask, int &errcnt, Q
         config.trfprio,                                                         // Transfer priority
         mask                                                                    // Write mask (can be obtained using the return value of getLockWord(), after being bitwise ANDed with "LWUSBCFG" [0x009F] and the resulting value cast to quint8)
     };
-    controlTransfer(SET, SET_USB_CONFIG, MEM_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_USB_CONFIG, PROM_WRITE_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
 }
 
 // Helper function to list devices
