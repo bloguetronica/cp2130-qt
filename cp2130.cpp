@@ -931,7 +931,7 @@ void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errs
     }
 }
 
-// Writes the entire CP2130 OTP ROM
+// Writes over the entire CP2130 OTP ROM
 void CP2130::writePROMConfig(const PROMConfig &config, int &errcnt, QString &errstr)
 {
     for (size_t i = 0; i < PROM_BLOCKS; ++i) {
