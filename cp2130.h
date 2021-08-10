@@ -294,10 +294,10 @@ public:
     void disableCS(quint8 channel, int &errcnt, QString &errstr);
     void disableSPIDelays(quint8 channel, int &errcnt, QString &errstr);
     void enableCS(quint8 channel, int &errcnt, QString &errstr);
-    quint8 endpointInAddr(int &errcnt, QString &errstr);
-    quint8 endpointOutAddr(int &errcnt, QString &errstr);
     quint8 getClockDivider(int &errcnt, QString &errstr);
     bool getCS(quint8 channel, int &errcnt, QString &errstr);
+    quint8 getEndpointInAddr(int &errcnt, QString &errstr);
+    quint8 getEndpointOutAddr(int &errcnt, QString &errstr);
     EventCounter getEventCounter(int &errcnt, QString &errstr);
     quint8 getFIFOThreshold(int &errcnt, QString &errstr);
     bool getGPIO0(int &errcnt, QString &errstr);
@@ -321,6 +321,7 @@ public:
     SiliconVersion getSiliconVersion(int &errcnt, QString &errstr);
     SPIDelays getSPIDelays(quint8 channel, int &errcnt, QString &errstr);
     SPIMode getSPIMode(quint8 channel, int &errcnt, QString &errstr);
+    quint8 getTransferPriority(int &errcnt, QString &errstr);
     USBConfig getUSBConfig(int &errcnt, QString &errstr);
     bool isOTPBlank(int &errcnt, QString &errstr);
     bool isOTPLocked(int &errcnt, QString &errstr);

@@ -310,22 +310,6 @@ void CP2130::enableCS(quint8 channel, int &errcnt, QString &errstr)
     }
 }
 
-// Returns the address of the endpoint assuming the IN direction
-quint8 CP2130::endpointInAddr(int &errcnt, QString &errstr)
-{
-    unsigned char controlBufferIn[9];
-    controlTransfer(GET, GET_USB_CONFIG, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-    return controlBufferIn[8] == PRIOWRITE ? 0x82 : 0x81;
-}
-
-// Returns the address of the endpoint assuming the OUT direction
-quint8 CP2130::endpointOutAddr(int &errcnt, QString &errstr)
-{
-    unsigned char controlBufferIn[9];
-    controlTransfer(GET, GET_USB_CONFIG, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-    return controlBufferIn[8] == PRIOWRITE ? 0x01 : 0x02;
-}
-
 // Returns the current clock divider value
 quint8 CP2130::getClockDivider(int &errcnt, QString &errstr)
 {
@@ -348,6 +332,18 @@ bool CP2130::getCS(quint8 channel, int &errcnt, QString &errstr)
         retval = ((0x01 << channel & (controlBufferIn[0] << 8 | controlBufferIn[1])) != 0x00);
     }
     return retval;
+}
+
+// Returns the address of the endpoint assuming the IN direction
+quint8 CP2130::getEndpointInAddr(int &errcnt, QString &errstr)
+{
+    return getTransferPriority(errcnt, errstr) == PRIOWRITE ? 0x82 : 0x81;
+}
+
+// Returns the address of the endpoint assuming the OUT direction
+quint8 CP2130::getEndpointOutAddr(int &errcnt, QString &errstr)
+{
+    return getTransferPriority(errcnt, errstr) == PRIOWRITE ? 0x01 : 0x02;
 }
 
 // Gets the event counter, including mode and value
@@ -620,6 +616,15 @@ CP2130::SPIMode CP2130::getSPIMode(quint8 channel, int &errcnt, QString &errstr)
     return mode;
 }
 
+// Returns the transfer priority from the CP2130 OTP ROM
+// This commonly used function presents less overhead than using getUSBConfig().trfprio for the same purpose
+quint8 CP2130::getTransferPriority(int &errcnt, QString &errstr)
+{
+    unsigned char controlBufferIn[9];
+    controlTransfer(GET, GET_USB_CONFIG, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    return controlBufferIn[8];
+}
+
 // Gets the USB configuration, including VID, PID, major and minor release versions, from the CP2130 OTP ROM
 CP2130::USBConfig CP2130::getUSBConfig(int &errcnt, QString &errstr)
 {
@@ -851,7 +856,7 @@ QVector<quint8> CP2130::spiRead(quint32 bytesToRead, quint8 endpointInAddr, quin
 // This function is a shorthand version of the previous one (both endpoint addresses are automatically deduced, at the cost of decreased speed)
 QVector<quint8> CP2130::spiRead(quint32 bytesToRead, int &errcnt, QString &errstr)
 {
-    return spiRead(bytesToRead, endpointInAddr(errcnt, errstr), endpointOutAddr(errcnt, errstr), errcnt, errstr);
+    return spiRead(bytesToRead, getEndpointInAddr(errcnt, errstr), getEndpointOutAddr(errcnt, errstr), errcnt, errstr);
 }
 
 // Writes to the SPI bus, using the given vector
@@ -878,7 +883,7 @@ void CP2130::spiWrite(const QVector<quint8> &data, quint8 endpointOutAddr, int &
 // This function is a shorthand version of the previous one (the endpoint OUT address is automatically deduced at the cost of decreased speed)
 void CP2130::spiWrite(const QVector<quint8> &data, int &errcnt, QString &errstr)
 {
-    spiWrite(data, endpointOutAddr(errcnt, errstr), errcnt, errstr);
+    spiWrite(data, getEndpointOutAddr(errcnt, errstr), errcnt, errstr);
 }
 
 // Aborts the current ReadWithRTR command
