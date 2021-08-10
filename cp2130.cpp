@@ -868,7 +868,7 @@ void CP2130::spiWrite(const QVector<quint8> &data, quint8 endpointOutAddr, int &
         static_cast<quint8>(bytesToWrite >> 16),
         static_cast<quint8>(bytesToWrite >> 24)
     };
-    for (quint32 i = 0; i < bytesToWrite; ++i) {
+    for (size_t i = 0; i < bytesToWrite; ++i) {
         writeCommandBuffer[i + 8] = data[i];
     }
     int bytesWritten;
