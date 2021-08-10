@@ -346,8 +346,8 @@ public:
     void setGPIOs(quint16 bmValues, quint16 bmMask, int &errcnt, QString &errstr);
     QVector<quint8> spiRead(quint32 bytesToRead, quint8 endpointInAddr, quint8 endpointOutAddr, int &errcnt, QString &errstr);
     QVector<quint8> spiRead(quint32 bytesToRead, int &errcnt, QString &errstr);
-    void spiWrite(const QVector<quint8> &writeData, quint8 endpointOutAddr, int &errcnt, QString &errstr);
-    void spiWrite(const QVector<quint8> &writeData, int &errcnt, QString &errstr);
+    void spiWrite(const QVector<quint8> &data, quint8 endpointOutAddr, int &errcnt, QString &errstr);
+    void spiWrite(const QVector<quint8> &data, int &errcnt, QString &errstr);
     void stopRTR(int &errcnt, QString &errstr);
     void writeLockWord(quint16 word, int &errcnt, QString &errstr);
     void writeManufacturerDesc(const QString &manufacturer, int &errcnt, QString &errstr);

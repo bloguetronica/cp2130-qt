@@ -837,11 +837,11 @@ QVector<quint8> CP2130::spiRead(quint32 bytesToRead, quint8 endpointInAddr, quin
     unsigned char readInputBuffer[bytesToRead];
     int bytesRead = 0;  // Important!
     bulkTransfer(endpointInAddr, readInputBuffer, static_cast<int>(sizeof(readInputBuffer)), &bytesRead, errcnt, errstr);
-    QVector<quint8> readData(bytesRead);
+    QVector<quint8> retdata(bytesRead);
     for (int i = 0; i < bytesRead; ++i) {
-        readData[i] = readInputBuffer[i];
+        retdata[i] = readInputBuffer[i];
     }
-    return readData;
+    return retdata;
 }
 
 // This function is a shorthand version of the previous one (both endpoint addresses are automatically deduced, at the cost of decreased speed)
@@ -852,14 +852,14 @@ QVector<quint8> CP2130::spiRead(quint32 bytesToRead, int &errcnt, QString &errst
 
 // Writes to the SPI bus, using the given vector
 // This is the prefered method of writing to the bus, if the endpoint OUT address is known
-void CP2130::spiWrite(const QVector<quint8> &writeData, quint8 endpointOutAddr, int &errcnt, QString &errstr)
+void CP2130::spiWrite(const QVector<quint8> &data, quint8 endpointOutAddr, int &errcnt, QString &errstr)
 {
 }
 
 // This function is a shorthand version of the previous one (the endpoint OUT address is automatically deduced at the cost of decreased speed)
-void CP2130::spiWrite(const QVector<quint8> &writeData, int &errcnt, QString &errstr)
+void CP2130::spiWrite(const QVector<quint8> &data, int &errcnt, QString &errstr)
 {
-    spiWrite(writeData, endpointOutAddr(errcnt, errstr), errcnt, errstr);
+    spiWrite(data, endpointOutAddr(errcnt, errstr), errcnt, errstr);
 }
 
 // Aborts the current ReadWithRTR command
