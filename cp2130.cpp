@@ -832,19 +832,11 @@ QVector<quint8> CP2130::spiRead(quint32 bytesToRead, quint8 endpointInAddr, quin
         static_cast<quint8>(bytesToRead >> 16),
         static_cast<quint8>(bytesToRead >> 24)
     };
-    int bytesWritten = 0;  // Important!
+    int bytesWritten;
     bulkTransfer(endpointOutAddr, readCommandBuffer, static_cast<int>(sizeof(readCommandBuffer)), &bytesWritten, errcnt, errstr);
-    if (bytesWritten != 8) {
-        errcnt += 1;
-        errstr.append(QObject::tr("Failed SPI read (sent %1 out of 8 bytes).\n").arg(bytesWritten));
-    }
     unsigned char readInputBuffer[bytesToRead];
     int bytesRead = 0;  // Important!
     bulkTransfer(endpointInAddr, readInputBuffer, static_cast<int>(sizeof(readInputBuffer)), &bytesRead, errcnt, errstr);
-    if (static_cast<quint32>(bytesRead) != bytesToRead) {
-        errcnt += 1;
-        errstr.append(QObject::tr("Failed SPI read (%1 byte(s) expected, %2 byte(s) received).\n").arg(bytesToRead).arg(bytesRead));
-    }
     QVector<quint8> readData(bytesRead);
     for (int i = 0; i < bytesRead; ++i) {
         readData[i] = readInputBuffer[i];
