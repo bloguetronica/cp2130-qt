@@ -313,13 +313,17 @@ void CP2130::enableCS(quint8 channel, int &errcnt, QString &errstr)
 // Returns the address of the endpoint assuming the IN direction
 quint8 CP2130::endpointInAddr(int &errcnt, QString &errstr)
 {
-    return getUSBConfig(errcnt, errstr).trfprio == PRIOWRITE ? 0x82 : 0x81;
+    unsigned char controlBufferIn[9];
+    controlTransfer(GET, GET_USB_CONFIG, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    return controlBufferIn[8] == PRIOWRITE ? 0x82 : 0x81;
 }
 
 // Returns the address of the endpoint assuming the OUT direction
 quint8 CP2130::endpointOutAddr(int &errcnt, QString &errstr)
 {
-    return getUSBConfig(errcnt, errstr).trfprio == PRIOWRITE ? 0x01 : 0x02;
+    unsigned char controlBufferIn[9];
+    controlTransfer(GET, GET_USB_CONFIG, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    return controlBufferIn[8] == PRIOWRITE ? 0x01 : 0x02;
 }
 
 // Returns the current clock divider value
@@ -854,6 +858,21 @@ QVector<quint8> CP2130::spiRead(quint32 bytesToRead, int &errcnt, QString &errst
 // This is the prefered method of writing to the bus, if the endpoint OUT address is known
 void CP2130::spiWrite(const QVector<quint8> &data, quint8 endpointOutAddr, int &errcnt, QString &errstr)
 {
+    quint32 bytesToWrite = static_cast<quint32>(data.size());
+    unsigned char writeCommandBuffer[bytesToWrite + 8] = {
+        0x00, 0x00,     // Reserved
+        CP2130::WRITE,  // Write command
+        0x00,           // Reserved
+        static_cast<quint8>(bytesToWrite),
+        static_cast<quint8>(bytesToWrite >> 8),
+        static_cast<quint8>(bytesToWrite >> 16),
+        static_cast<quint8>(bytesToWrite >> 24)
+    };
+    for (quint32 i = 0; i < bytesToWrite; ++i) {
+        writeCommandBuffer[i + 8] = data[i];
+    }
+    int bytesWritten;
+    bulkTransfer(endpointOutAddr, writeCommandBuffer, static_cast<int>(sizeof(writeCommandBuffer)), &bytesWritten, errcnt, errstr);
 }
 
 // This function is a shorthand version of the previous one (the endpoint OUT address is automatically deduced at the cost of decreased speed)
@@ -889,12 +908,12 @@ void CP2130::writeManufacturerDesc(const QString &manufacturer, int &errcnt, QSt
         errstr.append(QObject::tr("In writeManufacturerDesc(): manufacturer descriptor string cannot be longer than 62 characters.\n"));  // Program logic error
     } else {
         int length = 2 * strsize + 2;
-        unsigned char controlBufferOut[64];
-        controlBufferOut[0] = length;  // USB string descriptor length
-        controlBufferOut[1] = 0x03;  // USB string descriptor constant
+        unsigned char controlBufferOut[64] = {
+            static_cast<quint8>(length),  // USB string descriptor length
+            0x03                          // USB string descriptor constant
+        };
         quint16 bufsize = static_cast<quint16>(sizeof(controlBufferOut));
-        for (int i = 2; i < bufsize - 1; ++i)
-        {
+        for (int i = 2; i < bufsize - 1; ++i) {
             if (i < length) {
                 controlBufferOut[i] = static_cast<quint8>(manufacturer[(i - 2) / 2].unicode() >> (i % 2 == 0 ? 0 : 8));  // If index is even, value will correspond to the LSB of the UTF-16 character, otherwise it will correspond to the MSB of the same
             } else {
@@ -903,8 +922,7 @@ void CP2130::writeManufacturerDesc(const QString &manufacturer, int &errcnt, QSt
         }
         controlBufferOut[bufsize - 1] = 0x00;  // The last byte of the first table is reserved, so it should be set to zero
         controlTransfer(SET, SET_MANUFACTURING_STRING_1, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
-        for (int i = 0; i < bufsize; ++i)
-        {
+        for (int i = 0; i < bufsize; ++i) {
             if (i < length - 63) {
                 controlBufferOut[i] = static_cast<quint8>(manufacturer[(i + 61) / 2].unicode() >> (i % 2 == 0 ? 8 : 0));  // If index is even, value will correspond to the MSB of the UTF-16 character, otherwise it will correspond to the LSB of the same
             } else {
@@ -948,12 +966,12 @@ void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errs
         errstr.append(QObject::tr("In writeProductDesc(): product descriptor string cannot be longer than 62 characters.\n"));  // Program logic error
     } else {
         int length = 2 * strsize + 2;
-        unsigned char controlBufferOut[64];
-        controlBufferOut[0] = length;  // USB string descriptor length
-        controlBufferOut[1] = 0x03;  // USB string descriptor constant
+        unsigned char controlBufferOut[64] = {
+            static_cast<quint8>(length),  // USB string descriptor length
+            0x03                          // USB string descriptor constant
+        };
         quint16 bufsize = static_cast<quint16>(sizeof(controlBufferOut));
-        for (int i = 2; i < bufsize - 1; ++i)
-        {
+        for (int i = 2; i < bufsize - 1; ++i) {
             if (i < length) {
                 controlBufferOut[i] = static_cast<quint8>(product[(i - 2) / 2].unicode() >> (i % 2 == 0 ? 0 : 8));  // If index is even, value will correspond to the LSB of the UTF-16 character, otherwise it will correspond to the MSB of the same
             } else {
@@ -962,8 +980,7 @@ void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errs
         }
         controlBufferOut[bufsize - 1] = 0x00;  // The last byte of the first table is reserved, so it should be set to zero
         controlTransfer(SET, SET_PRODUCT_STRING_1, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
-        for (int i = 0; i < bufsize; ++i)
-        {
+        for (int i = 0; i < bufsize; ++i) {
             if (i < length - 63) {
                 controlBufferOut[i] = static_cast<quint8>(product[(i + 61) / 2].unicode() >> (i % 2 == 0 ? 8 : 0));  // If index is even, value will correspond to the MSB of the UTF-16 character, otherwise it will correspond to the LSB of the same
             } else {
@@ -994,12 +1011,14 @@ void CP2130::writeSerialDesc(const QString &serial, int &errcnt, QString &errstr
         errcnt += 1;
         errstr.append(QObject::tr("In writeSerialDesc(): serial descriptor string cannot be longer than 30 characters.\n"));  // Program logic error
     } else {
-        unsigned char controlBufferOut[64];
+        unsigned char controlBufferOut[64] = {
+            static_cast<quint8>(2 * strsize + 2),  // USB string descriptor length
+            0x03                                   // USB string descriptor constant
+        };
         controlBufferOut[0] = 2 * strsize + 2;  // USB string descriptor length
         controlBufferOut[1] = 0x03;  // USB string descriptor constant
         quint16 bufsize = static_cast<quint16>(sizeof(controlBufferOut));
-        for (int i = 2; i < bufsize; ++i)
-        {
+        for (int i = 2; i < bufsize; ++i) {
             if (i < controlBufferOut[0]) {  // If index is lesser than the USB descriptor length
                 controlBufferOut[i] = static_cast<quint8>(serial[(i - 2) / 2].unicode() >> (i % 2 == 0 ? 0 : 8));  // If index is even, value will correspond to the LSB of the UTF-16 character, otherwise it will correspond to the MSB of the same
             } else {
