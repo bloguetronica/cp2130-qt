@@ -819,6 +819,57 @@ void CP2130::setGPIOs(quint16 bmValues, quint16 bmMask, int &errcnt, QString &er
     controlTransfer(SET, SET_GPIO_VALUES, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
 }
 
+// Requests and reads the given number of bytes from the SPI bus, and then returns a vector
+// This is the prefered method of reading from the bus, if both endpoint addresses are known
+QVector<quint8> CP2130::spiRead(quint32 bytesToRead, quint8 endpointInAddr, quint8 endpointOutAddr, int &errcnt, QString &errstr)
+{
+    unsigned char readCommandBuffer[8] = {
+        0x00, 0x00,    // Reserved
+        CP2130::READ,  // Read command
+        0x00,          // Reserved
+        static_cast<quint8>(bytesToRead),
+        static_cast<quint8>(bytesToRead >> 8),
+        static_cast<quint8>(bytesToRead >> 16),
+        static_cast<quint8>(bytesToRead >> 24)
+    };
+    int bytesWritten = 0;  // Important!
+    bulkTransfer(endpointOutAddr, readCommandBuffer, static_cast<int>(sizeof(readCommandBuffer)), &bytesWritten, errcnt, errstr);
+    if (bytesWritten != 8) {
+        errcnt += 1;
+        errstr.append(QObject::tr("Failed SPI read (sent %1 out of 8 bytes).\n").arg(bytesWritten));
+    }
+    unsigned char readInputBuffer[bytesToRead];
+    int bytesRead = 0;  // Important!
+    bulkTransfer(endpointInAddr, readInputBuffer, static_cast<int>(sizeof(readInputBuffer)), &bytesRead, errcnt, errstr);
+    if (static_cast<quint32>(bytesRead) != bytesToRead) {
+        errcnt += 1;
+        errstr.append(QObject::tr("Failed SPI read (%1 byte(s) expected, %2 byte(s) received).\n").arg(bytesToRead).arg(bytesRead));
+    }
+    QVector<quint8> readData(bytesRead);
+    for (int i = 0; i < bytesRead; ++i) {
+        readData[i] = readInputBuffer[i];
+    }
+    return readData;
+}
+
+// This function is a shorthand version of the previous one (both endpoint addresses are automatically deduced, at the cost of decreased speed)
+QVector<quint8> CP2130::spiRead(quint32 bytesToRead, int &errcnt, QString &errstr)
+{
+    return spiRead(bytesToRead, endpointInAddr(errcnt, errstr), endpointOutAddr(errcnt, errstr), errcnt, errstr);
+}
+
+// Writes to the SPI bus, using the given vector
+// This is the prefered method of writing to the bus, if the endpoint OUT address is known
+void CP2130::spiWrite(const QVector<quint8> &writeData, quint8 endpointOutAddr, int &errcnt, QString &errstr)
+{
+}
+
+// This function is a shorthand version of the previous one (the endpoint OUT address is automatically deduced at the cost of decreased speed)
+void CP2130::spiWrite(const QVector<quint8> &writeData, int &errcnt, QString &errstr)
+{
+    spiWrite(writeData, endpointOutAddr(errcnt, errstr), errcnt, errstr);
+}
+
 // Aborts the current ReadWithRTR command
 void CP2130::stopRTR(int &errcnt, QString &errstr)
 {
