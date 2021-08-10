@@ -1015,8 +1015,6 @@ void CP2130::writeSerialDesc(const QString &serial, int &errcnt, QString &errstr
             static_cast<quint8>(2 * strsize + 2),  // USB string descriptor length
             0x03                                   // USB string descriptor constant
         };
-        controlBufferOut[0] = 2 * strsize + 2;  // USB string descriptor length
-        controlBufferOut[1] = 0x03;  // USB string descriptor constant
         quint16 bufsize = static_cast<quint16>(sizeof(controlBufferOut));
         for (int i = 2; i < bufsize; ++i) {
             if (i < controlBufferOut[0]) {  // If index is lesser than the USB descriptor length
