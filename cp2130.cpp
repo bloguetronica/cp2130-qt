@@ -858,7 +858,7 @@ QVector<quint8> CP2130::spiRead(quint32 bytesToRead, int &errcnt, QString &errst
 // This is the prefered method of writing to the bus, if the endpoint OUT address is known
 void CP2130::spiWrite(const QVector<quint8> &data, quint8 endpointOutAddr, int &errcnt, QString &errstr)
 {
-    quint32 bytesToWrite = static_cast<quint32>(data.size());
+    quint32 bytesToWrite = static_cast<quint32>(data.size());  // Conversion done for sanity purposes
     unsigned char writeCommandBuffer[bytesToWrite + 8] = {
         0x00, 0x00,     // Reserved
         CP2130::WRITE,  // Write command
