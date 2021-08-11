@@ -31,7 +31,7 @@ const unsigned int TR_TIMEOUT = 100;  // Transfer timeout in milliseconds
 // "Equal to" operator for EventCounter
 bool CP2130::EventCounter::operator ==(const CP2130::EventCounter &other) const
 {
-    return (overflow == other.overflow && mode == other.mode && value == other.value);
+    return overflow == other.overflow && mode == other.mode && value == other.value;
 }
 
 // "Not equal to" operator for EventCounter
@@ -43,7 +43,7 @@ bool CP2130::EventCounter::operator !=(const CP2130::EventCounter &other) const
 // "Equal to" operator for PinConfig
 bool CP2130::PinConfig::operator ==(const CP2130::PinConfig &other) const
 {
-    return (gpio0 == other.gpio0 && gpio1 == other.gpio1 && gpio2 == other.gpio2 && gpio3 == other.gpio3 && gpio4 == other.gpio4 && gpio5 == other.gpio5 && gpio6 == other.gpio6 && gpio7 == other.gpio7 && gpio8 == other.gpio8 && gpio9 == other.gpio9 && gpio10 == other.gpio10 && sspndlvl == other.sspndlvl && sspndmode == other.sspndmode && wkupmask == other.wkupmask && wkupmatch == other.wkupmatch);
+    return gpio0 == other.gpio0 && gpio1 == other.gpio1 && gpio2 == other.gpio2 && gpio3 == other.gpio3 && gpio4 == other.gpio4 && gpio5 == other.gpio5 && gpio6 == other.gpio6 && gpio7 == other.gpio7 && gpio8 == other.gpio8 && gpio9 == other.gpio9 && gpio10 == other.gpio10 && sspndlvl == other.sspndlvl && sspndmode == other.sspndmode && wkupmask == other.wkupmask && wkupmatch == other.wkupmatch;
 }
 
 // "Not equal to" operator for PinConfig
@@ -88,7 +88,7 @@ const quint8 &CP2130::PROMConfig::operator [](size_t index) const  // For correc
 // "Equal to" operator for SiliconVersion
 bool CP2130::SiliconVersion::operator ==(const CP2130::SiliconVersion &other) const
 {
-    return (maj == other.maj && min == other.min);
+    return maj == other.maj && min == other.min;
 }
 
 // "Not equal to" operator for SiliconVersion
@@ -100,7 +100,7 @@ bool CP2130::SiliconVersion::operator !=(const CP2130::SiliconVersion &other) co
 // "Equal to" operator for SPIDelays
 bool CP2130::SPIDelays::operator ==(const CP2130::SPIDelays &other) const
 {
-    return (cstglen == other.cstglen && prdasten == other.prdasten && pstasten == other.pstasten && itbyten == other.itbyten && prdastdly == other.prdastdly && pstastdly == other.pstastdly && itbytdly == other.itbytdly);
+    return cstglen == other.cstglen && prdasten == other.prdasten && pstasten == other.pstasten && itbyten == other.itbyten && prdastdly == other.prdastdly && pstastdly == other.pstastdly && itbytdly == other.itbytdly;
 }
 
 // "Not equal to" operator for SPIDelays
@@ -112,7 +112,7 @@ bool CP2130::SPIDelays::operator !=(const CP2130::SPIDelays &other) const
 // "Equal to" operator for SPIMode
 bool CP2130::SPIMode::operator ==(const CP2130::SPIMode &other) const
 {
-    return (csmode == other.csmode && cfrq == other.cfrq && cpol == other.cpol && cpha == other.cpha);
+    return csmode == other.csmode && cfrq == other.cfrq && cpol == other.cpol && cpha == other.cpha;
 }
 
 // "Not equal to" operator for SPIMode
@@ -124,7 +124,7 @@ bool CP2130::SPIMode::operator !=(const CP2130::SPIMode &other) const
 // "Equal to" operator for USBConfig
 bool CP2130::USBConfig::operator ==(const CP2130::USBConfig &other) const
 {
-    return (vid == other.vid && pid == other.pid && majrel == other.majrel && minrel == other.minrel && maxpow == other.maxpow && powmode == other.powmode && trfprio == other.trfprio);
+    return vid == other.vid && pid == other.pid && majrel == other.majrel && minrel == other.minrel && maxpow == other.maxpow && powmode == other.powmode && trfprio == other.trfprio;
 }
 
 // "Not equal to" operator for USBConfig
@@ -329,7 +329,7 @@ bool CP2130::getCS(quint8 channel, int &errcnt, QString &errstr)
     } else {
         unsigned char controlBufferIn[4];
         controlTransfer(GET, GET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-        retval = ((0x01 << channel & (controlBufferIn[0] << 8 | controlBufferIn[1])) != 0x00);
+        retval = (0x01 << channel & (controlBufferIn[0] << 8 | controlBufferIn[1])) != 0x00;
     }
     return retval;
 }
@@ -352,7 +352,7 @@ CP2130::EventCounter CP2130::getEventCounter(int &errcnt, QString &errstr)
     unsigned char controlBufferIn[3];
     controlTransfer(GET, GET_EVENT_COUNTER, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
     CP2130::EventCounter evtcntr;
-    evtcntr.overflow = ((0x80 & controlBufferIn[0]) != 0x00);                            // Event counter overflow bit corresponds to bit 7 of byte 0
+    evtcntr.overflow = (0x80 & controlBufferIn[0]) != 0x00;                              // Event counter overflow bit corresponds to bit 7 of byte 0
     evtcntr.mode = 0x07 & controlBufferIn[0];                                            // GPIO.4/EVTCNTR pin mode corresponds to bits 3:0 of byte 0
     evtcntr.value = static_cast<quint16>(controlBufferIn[1] << 8 | controlBufferIn[2]);  // Event count value corresponds to bytes 1 and 2 (big-endian conversion)
     return evtcntr;
@@ -369,67 +369,67 @@ quint8 CP2130::getFIFOThreshold(int &errcnt, QString &errstr)
 // Returns the current value of the GPIO.0 pin on the CP2130
 bool CP2130::getGPIO0(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO0 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO0 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.1 pin on the CP2130
 bool CP2130::getGPIO1(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO1 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO1 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.2 pin on the CP2130
 bool CP2130::getGPIO2(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO2 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO2 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.3 pin on the CP2130
 bool CP2130::getGPIO3(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO3 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO3 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.4 pin on the CP2130
 bool CP2130::getGPIO4(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO4 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO4 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.5 pin on the CP2130
 bool CP2130::getGPIO5(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO5 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO5 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.6 pin on the CP2130
 bool CP2130::getGPIO6(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO6 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO6 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.7 pin on the CP2130
 bool CP2130::getGPIO7(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO7 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO7 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.8 pin on the CP2130
 bool CP2130::getGPIO8(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO8 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO8 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.9 pin on the CP2130
 bool CP2130::getGPIO9(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO9 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO9 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the current value of the GPIO.10 pin on the CP2130
 bool CP2130::getGPIO10(int &errcnt, QString &errstr)
 {
-    return ((BMGPIO10 & getGPIOs(errcnt, errstr)) != 0x0000);
+    return (BMGPIO10 & getGPIOs(errcnt, errstr)) != 0x0000;
 }
 
 // Returns the value of all GPIO pins on the CP2130, in bitmap format
@@ -585,10 +585,10 @@ CP2130::SPIDelays CP2130::getSPIDelays(quint8 channel, int &errcnt, QString &err
     } else {
         unsigned char controlBufferIn[8];
         controlTransfer(GET, GET_SPI_DELAY, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-        delays.cstglen = ((0x08 & controlBufferIn[1]) != 0x00);                                 // CS toggle enable corresponds to bit 3 of byte 1
-        delays.prdasten = ((0x04 & controlBufferIn[1]) != 0x00);                                // Pre-deassert delay enable corresponds to bit 2 of byte 1
-        delays.pstasten = ((0x02 & controlBufferIn[1]) != 0x00);                                // Post-assert delay enable to bit 1 of byte 1
-        delays.itbyten = ((0x01 &controlBufferIn[1]) != 0x00);                                  // Inter-byte delay enable corresponds to bit 0 of byte 1
+        delays.cstglen = (0x08 & controlBufferIn[1]) != 0x00;                                   // CS toggle enable corresponds to bit 3 of byte 1
+        delays.prdasten = (0x04 & controlBufferIn[1]) != 0x00;                                  // Pre-deassert delay enable corresponds to bit 2 of byte 1
+        delays.pstasten = (0x02 & controlBufferIn[1]) != 0x00;                                  // Post-assert delay enable to bit 1 of byte 1
+        delays.itbyten = (0x01 &controlBufferIn[1]) != 0x00;                                    // Inter-byte delay enable corresponds to bit 0 of byte 1
         delays.itbytdly = static_cast<quint16>(controlBufferIn[2] << 8 | controlBufferIn[3]);   // Inter-byte delay corresponds to bytes 2 and 3 (big-endian conversion)
         delays.pstastdly = static_cast<quint16>(controlBufferIn[4] << 8 | controlBufferIn[5]);  // Post-assert delay corresponds to bytes 4 and 5 (big-endian conversion)
         delays.prdastdly = static_cast<quint16>(controlBufferIn[6] << 8 | controlBufferIn[7]);  // Pre-deassert delay corresponds to bytes 6 and 7 (big-endian conversion)
@@ -608,10 +608,10 @@ CP2130::SPIMode CP2130::getSPIMode(quint8 channel, int &errcnt, QString &errstr)
     } else {
         unsigned char controlBufferIn[11];
         controlTransfer(GET, GET_SPI_WORD, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-        mode.csmode = ((0x08 & controlBufferIn[channel]) != 0x00);  // Chip select mode corresponds to bit 3
-        mode.cfrq = 0x07 & controlBufferIn[channel];                // Clock frequency is set in the bits 2:0
-        mode.cpha = ((0x20 & controlBufferIn[channel]) != 0x00);    // Clock phase corresponds to bit 5
-        mode.cpol = ((0x10 &controlBufferIn[channel]) != 0x00);     // Clock polarity corresponds to bit 4
+        mode.csmode = (0x08 & controlBufferIn[channel]) != 0x00;  // Chip select mode corresponds to bit 3
+        mode.cfrq = 0x07 & controlBufferIn[channel];              // Clock frequency is set in the bits 2:0
+        mode.cpha = (0x20 & controlBufferIn[channel]) != 0x00;    // Clock phase corresponds to bit 5
+        mode.cpol = (0x10 &controlBufferIn[channel]) != 0x00;     // Clock polarity corresponds to bit 4
     }
     return mode;
 }
@@ -650,7 +650,7 @@ bool CP2130::isOTPBlank(int &errcnt, QString &errstr)
 // Returns true is the OTP ROM of the CP2130 is locked
 bool CP2130::isOTPLocked(int &errcnt, QString &errstr)
 {
-    return ((LWALL & getLockWord(errcnt, errstr)) == 0x0000);  // Note that the reserved bits are ignored
+    return (LWALL & getLockWord(errcnt, errstr)) == 0x0000;  // Note that the reserved bits are ignored
 }
 
 // Returns true if a ReadWithRTR command is currently active
@@ -658,7 +658,7 @@ bool CP2130::isRTRActive(int &errcnt, QString &errstr)
 {
     unsigned char controlBufferIn[1];
     controlTransfer(GET, GET_RTR_STATE, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-    return (controlBufferIn[0] == 0x01);
+    return controlBufferIn[0] == 0x01;
 }
 
 // Locks the OTP ROM of the CP2130, preventing further changes
