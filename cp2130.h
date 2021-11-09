@@ -1,4 +1,4 @@
-/* CP2130 class for Qt - Version 2.0.3
+/* CP2130 class for Qt - Version 2.1.0
    Copyright (c) 2021 Samuel Lourenço
 
    This library is free software: you can redistribute it and/or modify it
@@ -34,6 +34,8 @@ private:
     libusb_device_handle *handle_;
     bool disconnected_, kernelAttached_;
 
+    void writeDescGeneric(const QString &descriptor, quint8 command, int tables, int &errcnt, QString &errstr);
+
 public:
     // Class definitions
     static const quint16 VID = 0x10C4;     // Default USB vendor ID
@@ -42,6 +44,11 @@ public:
     static const int ERROR_INIT = 1;       // Returned by open() in case of a libusb initialization failure
     static const int ERROR_NOT_FOUND = 2;  // Returned by open() if the device was not found
     static const int ERROR_BUSY = 3;       // Returned by open() if the device is already in use
+
+    // Descriptor specific definitions
+    static const size_t DESCMAX_MANUFACTURER = 62;  // Maximum length of manufacturer descriptor
+    static const size_t DESCMAX_PRODUCT = 62;       // Maximum length of product descriptor
+    static const size_t DESCMAX_SERIAL = 30;        // Maximum length of serial descriptor
 
     // OTP ROM specific definitions
     static const size_t PROM_BLOCKS = 8;                            // Number of blocks of the OTP ROM
@@ -327,7 +334,7 @@ public:
     bool isOTPLocked(int &errcnt, QString &errstr);
     bool isRTRActive(int &errcnt, QString &errstr);
     void lockOTP(int &errcnt, QString &errstr);
-    int open(quint16 vid, quint16 pid, const QString &serial);
+    int open(quint16 vid, quint16 pid, const QString &serial = QString());
     void reset(int &errcnt, QString &errstr);
     void selectCS(quint8 channel, int &errcnt, QString &errstr);
     void setClockDivider(quint8 value, int &errcnt, QString &errstr);

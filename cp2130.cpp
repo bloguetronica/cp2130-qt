@@ -1,4 +1,4 @@
-/* CP2130 class for Qt - Version 2.0.3
+/* CP2130 class for Qt - Version 2.1.0
    Copyright (c) 2021 Samuel Lourenço
 
    This library is free software: you can redistribute it and/or modify it
@@ -27,6 +27,29 @@ extern "C" {
 
 // Definitions
 const unsigned int TR_TIMEOUT = 500;  // Transfer timeout in milliseconds (increased to 500ms since version 2.0.2)
+
+// Private generic procedure used to write any descriptor (added as a refactor in version 2.1.0)
+void CP2130::writeDescGeneric(const QString &descriptor, quint8 command, int tables, int &errcnt, QString &errstr)
+{
+    int length = 2 * descriptor.size() + 2;
+    const quint16 bufsize = 64;  // To be declared outside
+    unsigned char controlBufferOut[bufsize] = {
+        static_cast<quint8>(length),  // USB string descriptor length
+        0x03                          // USB string descriptor constant
+    };
+    for (int i = 0; i < tables; ++i) {
+        int start = i == 0 ? 2 : 0;
+        int offset = 63 * i;
+        for (int j = start; j < bufsize - 1; ++j) {
+            if (j < length - offset) {
+                controlBufferOut[j] = static_cast<quint8>(descriptor[(offset + j - 2) / 2].unicode() >> ((i + j) % 2 == 0 ? 0 : 8));
+            } else {
+                controlBufferOut[j] = 0x00;
+            }
+        }
+        controlTransfer(SET, command + 2 * i, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+    }
+}
 
 // "Equal to" operator for EventCounter
 bool CP2130::EventCounter::operator ==(const CP2130::EventCounter &other) const
@@ -166,15 +189,15 @@ void CP2130::bulkTransfer(quint8 endpointAddr, unsigned char *data, int length, 
 {
     if (!isOpen()) {
         errcnt += 1;
-        errstr.append(QObject::tr("In bulkTransfer(): device is not open.\n"));  // Program logic error
+        errstr += QObject::tr("In bulkTransfer(): device is not open.\n");  // Program logic error
     } else {
         int result = libusb_bulk_transfer(handle_, endpointAddr, data, length, transferred, TR_TIMEOUT);
         if (result != 0 || (transferred != nullptr && *transferred != length)) {  // Since version 2.0.2, the number of transferred bytes is also verified, as long as a valid (non-null) pointer is passed via "transferred"
             errcnt += 1;
             if (endpointAddr < 0x80) {
-                errstr.append(QObject::tr("Failed bulk OUT transfer to endpoint %1 (address 0x%2).\n").arg(0x0F & endpointAddr).arg(endpointAddr, 2, 16, QChar('0')));
+                errstr += QObject::tr("Failed bulk OUT transfer to endpoint %1 (address 0x%2).\n").arg(0x0F & endpointAddr).arg(endpointAddr, 2, 16, QChar('0'));
             } else {
-                errstr.append(QObject::tr("Failed bulk IN transfer from endpoint %1 (address 0x%2).\n").arg(0x0F & endpointAddr).arg(endpointAddr, 2, 16, QChar('0')));
+                errstr += QObject::tr("Failed bulk IN transfer from endpoint %1 (address 0x%2).\n").arg(0x0F & endpointAddr).arg(endpointAddr, 2, 16, QChar('0'));
             }
             if (result == LIBUSB_ERROR_NO_DEVICE || result == LIBUSB_ERROR_IO) {  // Note that libusb_bulk_transfer() may return "LIBUSB_ERROR_IO" [-1] on device disconnect (version 2.0.2)
                 disconnected_ = true;  // This reports that the device has been disconnected
@@ -203,7 +226,7 @@ void CP2130::configureGPIO(quint8 pin, quint8 mode, bool value,  int &errcnt, QS
 {
     if (pin > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In configureGPIO(): Pin number must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In configureGPIO(): Pin number must be between 0 and 10.\n");  // Program logic error
     } else {
         unsigned char controlBufferOut[3] = {
             pin,   // Selected GPIO pin
@@ -219,7 +242,7 @@ void CP2130::configureSPIDelays(quint8 channel, const SPIDelays &delays, int &er
 {
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In configureSPIDelays(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In configureSPIDelays(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
         unsigned char controlBufferOut[8] = {
             channel,                                                                                                    // Selected channel
@@ -237,7 +260,7 @@ void CP2130::configureSPIMode(quint8 channel, const SPIMode &mode, int &errcnt, 
 {
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In configureSPIMode(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In configureSPIMode(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
         unsigned char controlBufferOut[2] = {
             channel,                                                                                      // Selected channel
@@ -252,13 +275,13 @@ void CP2130::controlTransfer(quint8 bmRequestType, quint8 bRequest, quint16 wVal
 {
     if (!isOpen()) {
         errcnt += 1;
-        errstr.append(QObject::tr("In controlTransfer(): device is not open.\n"));  // Program logic error
+        errstr += QObject::tr("In controlTransfer(): device is not open.\n");  // Program logic error
     } else {
         int result = libusb_control_transfer(handle_, bmRequestType, bRequest, wValue, wIndex, data, wLength, TR_TIMEOUT);
         if (result != wLength) {
             errcnt += 1;
-            errstr.append(QObject::tr("Failed control transfer (0x%1, 0x%2).\n").arg(bmRequestType, 2, 16, QChar('0')).arg(bRequest, 2, 16, QChar('0')));
-            if (result == LIBUSB_ERROR_NO_DEVICE || result == LIBUSB_ERROR_IO || result == LIBUSB_ERROR_PIPE) {   // Note that libusb_control_transfer() may return "LIBUSB_ERROR_IO" [-1] or "LIBUSB_ERROR_PIPE" [-9] on device disconnect (version 2.0.2)
+            errstr += QObject::tr("Failed control transfer (0x%1, 0x%2).\n").arg(bmRequestType, 2, 16, QChar('0')).arg(bRequest, 2, 16, QChar('0'));
+            if (result == LIBUSB_ERROR_NO_DEVICE || result == LIBUSB_ERROR_IO || result == LIBUSB_ERROR_PIPE) {  // Note that libusb_control_transfer() may return "LIBUSB_ERROR_IO" [-1] or "LIBUSB_ERROR_PIPE" [-9] on device disconnect (version 2.0.2)
                 disconnected_ = true;  // This reports that the device has been disconnected
             }
         }
@@ -270,7 +293,7 @@ void CP2130::disableCS(quint8 channel, int &errcnt, QString &errstr)
 {
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In disableCS(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In disableCS(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
         unsigned char controlBufferOut[2] = {
             channel,  // Selected channel
@@ -285,7 +308,7 @@ void CP2130::disableSPIDelays(quint8 channel, int &errcnt, QString &errstr)
 {
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In disableSPIDelays(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In disableSPIDelays(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
         unsigned char controlBufferOut[8] = {
             channel,     // Selected channel
@@ -303,7 +326,7 @@ void CP2130::enableCS(quint8 channel, int &errcnt, QString &errstr)
 {
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In enableCS(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In enableCS(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
         unsigned char controlBufferOut[2] = {
             channel,  // Selected channel
@@ -327,7 +350,7 @@ bool CP2130::getCS(quint8 channel, int &errcnt, QString &errstr)
     bool cs;
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In getCS(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In getCS(): SPI channel value must be between 0 and 10.\n");  // Program logic error
         cs = false;
     } else {
         unsigned char controlBufferIn[4];
@@ -458,11 +481,11 @@ QString CP2130::getManufacturerDesc(int &errcnt, QString &errstr)
     quint16 bufsize = static_cast<quint16>(sizeof(controlBufferIn));
     controlTransfer(GET, GET_MANUFACTURING_STRING_1, 0x0000, 0x0000, controlBufferIn, bufsize, errcnt, errstr);
     QString manufacturer;
-    int length = controlBufferIn[0];
-    int end = length > 62 ? 62 : length;
-    for (int i = 2; i < end; i += 2) {  // Process first 30 characters (bytes 2-61 of the array)
+    size_t length = controlBufferIn[0];
+    size_t end = length > 62 ? 62 : length;
+    for (size_t i = 2; i < end; i += 2) {  // Process first 30 characters (bytes 2-61 of the array)
         if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Filter out null characters
-            manufacturer.append(QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]));  // UTF-16LE conversion as per the USB 2.0 specification
+            manufacturer += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
         }
     }
     if (length > 62) {
@@ -470,12 +493,12 @@ QString CP2130::getManufacturerDesc(int &errcnt, QString &errstr)
         controlTransfer(GET, GET_MANUFACTURING_STRING_2, 0x0000, 0x0000, controlBufferIn, bufsize, errcnt, errstr);
         midchar = static_cast<quint16>(controlBufferIn[0] << 8 | midchar);  // Reconstruct the char in the middle
         if (midchar != 0x0000) {  // Filter out the reconstructed char if the same is null
-            manufacturer.append(QChar(midchar));
+            manufacturer += QChar(midchar);
         }
         end = length - 63;
-        for (int i = 1; i < end; i += 2) {  // Process remaining characters, up to 31 (bytes 1-62 of the array)
+        for (size_t i = 1; i < end; i += 2) {  // Process remaining characters, up to 31 (bytes 1-62 of the array)
             if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Again, filter out null characters
-                manufacturer.append(QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]));  // UTF-16LE conversion as per the USB 2.0 specification
+                manufacturer += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
             }
         }
     }
@@ -514,11 +537,11 @@ QString CP2130::getProductDesc(int &errcnt, QString &errstr)
     quint16 bufsize = static_cast<quint16>(sizeof(controlBufferIn));
     controlTransfer(GET, GET_PRODUCT_STRING_1, 0x0000, 0x0000, controlBufferIn, bufsize, errcnt, errstr);
     QString product;
-    int length = controlBufferIn[0];
-    int end = length > 62 ? 62 : length;
-    for (int i = 2; i < end; i += 2) {  // Process first 30 characters (bytes 2-61 of the array)
+    size_t length = controlBufferIn[0];
+    size_t end = length > 62 ? 62 : length;
+    for (size_t i = 2; i < end; i += 2) {  // Process first 30 characters (bytes 2-61 of the array)
         if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Filter out null characters
-            product.append(QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]));  // UTF-16LE conversion as per the USB 2.0 specification
+            product += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
         }
     }
     if (length > 62) {
@@ -526,12 +549,12 @@ QString CP2130::getProductDesc(int &errcnt, QString &errstr)
         controlTransfer(GET, GET_PRODUCT_STRING_2, 0x0000, 0x0000, controlBufferIn, bufsize, errcnt, errstr);
         midchar = static_cast<quint16>(controlBufferIn[0] << 8 | midchar);  // Reconstruct the char in the middle
         if (midchar != 0x0000) {  // Filter out the reconstructed char if the same is null
-            product.append(QChar(midchar));
+            product += QChar(midchar);
         }
         end = length - 63;
-        for (int i = 1; i < end; i += 2) {  // Process remaining characters, up to 31 (bytes 1-62 of the array)
+        for (size_t i = 1; i < end; i += 2) {  // Process remaining characters, up to 31 (bytes 1-62 of the array)
             if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Again, filter out null characters
-                product.append(QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]));  // UTF-16LE conversion as per the USB 2.0 specification
+                product += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
             }
         }
     }
@@ -558,9 +581,9 @@ QString CP2130::getSerialDesc(int &errcnt, QString &errstr)
     unsigned char controlBufferIn[64];
     controlTransfer(GET, GET_SERIAL_STRING, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
     QString serial;
-    for (int i = 2; i < controlBufferIn[0]; i += 2) {
+    for (size_t i = 2; i < controlBufferIn[0]; i += 2) {
         if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Filter out null characters
-            serial.append(QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]));  // UTF-16LE conversion as per the USB 2.0 specification
+            serial += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
         }
     }
     return serial;
@@ -583,7 +606,7 @@ CP2130::SPIDelays CP2130::getSPIDelays(quint8 channel, int &errcnt, QString &err
     SPIDelays delays;
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In getSPIDelays(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In getSPIDelays(): SPI channel value must be between 0 and 10.\n");  // Program logic error
         delays = {false, false, false, false, 0x0000, 0x0000, 0x0000};
     } else {
         unsigned char controlBufferIn[8];
@@ -595,7 +618,6 @@ CP2130::SPIDelays CP2130::getSPIDelays(quint8 channel, int &errcnt, QString &err
         delays.itbytdly = static_cast<quint16>(controlBufferIn[2] << 8 | controlBufferIn[3]);   // Inter-byte delay corresponds to bytes 2 and 3 (big-endian conversion)
         delays.pstastdly = static_cast<quint16>(controlBufferIn[4] << 8 | controlBufferIn[5]);  // Post-assert delay corresponds to bytes 4 and 5 (big-endian conversion)
         delays.prdastdly = static_cast<quint16>(controlBufferIn[6] << 8 | controlBufferIn[7]);  // Pre-deassert delay corresponds to bytes 6 and 7 (big-endian conversion)
-
     }
     return delays;
 }
@@ -606,7 +628,7 @@ CP2130::SPIMode CP2130::getSPIMode(quint8 channel, int &errcnt, QString &errstr)
     SPIMode mode;
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In getSPIMode(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In getSPIMode(): SPI channel value must be between 0 and 10.\n");  // Program logic error
         mode = {false, 0x00, false, false};
     } else {
         unsigned char controlBufferIn[11];
@@ -620,12 +642,9 @@ CP2130::SPIMode CP2130::getSPIMode(quint8 channel, int &errcnt, QString &errstr)
 }
 
 // Returns the transfer priority from the CP2130 OTP ROM
-// This commonly used function presents less overhead than using getUSBConfig().trfprio for the same purpose
 quint8 CP2130::getTransferPriority(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[9];
-    controlTransfer(GET, GET_USB_CONFIG, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-    return controlBufferIn[8];
+    return getUSBConfig(errcnt, errstr).trfprio;  // Refactored in version 2.1.0, because the overhead presented by this solution was found to be very slim
 }
 
 // Gets the USB configuration, including VID, PID, major and minor release versions, from the CP2130 OTP ROM
@@ -670,7 +689,8 @@ void CP2130::lockOTP(int &errcnt, QString &errstr)
     writeLockWord(0x0000, errcnt, errstr);  // Both lock bytes are set to zero
 }
 
-// Opens the device having the given serial number, and assigns its handle
+// Opens the device having the given VID, PID and, optionally, the given serial number, and assigns its handle
+// Since version 2.1.0, it is not required to specify a serial number
 int CP2130::open(quint16 vid, quint16 pid, const QString &serial)
 {
     int retval = SUCCESS;
@@ -678,7 +698,11 @@ int CP2130::open(quint16 vid, quint16 pid, const QString &serial)
         if (libusb_init(&context_) != 0) {  // Initialize libusb. In case of failure
             retval = ERROR_INIT;
         } else {  // If libusb is initialized
-            handle_ = libusb_open_device_with_vid_pid_serial(context_, vid, pid, reinterpret_cast<unsigned char *>(serial.toLocal8Bit().data()));
+            if (serial.isNull()) {  // Note that serial, by omission, is a null QString
+                handle_ = libusb_open_device_with_vid_pid(context_, vid, pid);  // If no serial number is specified, this will open the first device found with matching VID and PID
+            } else {
+                handle_ = libusb_open_device_with_vid_pid_serial(context_, vid, pid, reinterpret_cast<unsigned char *>(serial.toLocal8Bit().data()));
+            }
             if (handle_ == nullptr) {  // If the previous operation fails to get a device handle
                 libusb_exit(context_);  // Deinitialize libusb
                 retval = ERROR_NOT_FOUND;
@@ -717,7 +741,7 @@ void CP2130::selectCS(quint8 channel, int &errcnt, QString &errstr)
 {
     if (channel > 10) {
         errcnt += 1;
-        errstr.append(QObject::tr("In selectCS(): SPI channel value must be between 0 and 10.\n"));  // Program logic error
+        errstr += QObject::tr("In selectCS(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
         unsigned char controlBufferOut[2] = {
             channel,  // Selected channel
@@ -918,34 +942,12 @@ void CP2130::writeLockWord(quint16 word, int &errcnt, QString &errstr)
 // Writes the manufacturer descriptor to the CP2130 OTP ROM
 void CP2130::writeManufacturerDesc(const QString &manufacturer, int &errcnt, QString &errstr)
 {
-    int strsize = manufacturer.size();
-    if (strsize > 62) {
+    size_t strsize = static_cast<size_t>(manufacturer.size());
+    if (strsize > DESCMAX_MANUFACTURER) {
         errcnt += 1;
-        errstr.append(QObject::tr("In writeManufacturerDesc(): manufacturer descriptor string cannot be longer than 62 characters.\n"));  // Program logic error
+        errstr += QObject::tr("In writeManufacturerDesc(): manufacturer descriptor string cannot be longer than 62 characters.\n");  // Program logic error
     } else {
-        int length = 2 * strsize + 2;
-        unsigned char controlBufferOut[64] = {
-            static_cast<quint8>(length),  // USB string descriptor length
-            0x03                          // USB string descriptor constant
-        };
-        quint16 bufsize = static_cast<quint16>(sizeof(controlBufferOut));
-        for (int i = 2; i < bufsize - 1; ++i) {
-            if (i < length) {
-                controlBufferOut[i] = static_cast<quint8>(manufacturer[(i - 2) / 2].unicode() >> (i % 2 == 0 ? 0 : 8));  // If index is even, value will correspond to the LSB of the UTF-16 character, otherwise it will correspond to the MSB of the same
-            } else {
-                controlBufferOut[i] = 0x00;
-            }
-        }
-        controlBufferOut[bufsize - 1] = 0x00;  // The last byte of the first table is reserved, so it should be set to zero
-        controlTransfer(SET, SET_MANUFACTURING_STRING_1, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
-        for (int i = 0; i < bufsize; ++i) {
-            if (i < length - 63) {
-                controlBufferOut[i] = static_cast<quint8>(manufacturer[(i + 61) / 2].unicode() >> (i % 2 == 0 ? 8 : 0));  // If index is even, value will correspond to the MSB of the UTF-16 character, otherwise it will correspond to the LSB of the same
-            } else {
-                controlBufferOut[i] = 0x00;  // Note that, inherently, the last byte of the second table will always be set to zero
-            }
-        }
-        controlTransfer(SET, SET_MANUFACTURING_STRING_2, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        writeDescGeneric(manufacturer, SET_MANUFACTURING_STRING_1, 2, errcnt, errstr);  // Refactored in version 2.1.0
     }
 }
 
@@ -976,34 +978,12 @@ void CP2130::writePinConfig(const PinConfig &config, int &errcnt, QString &errst
 // Writes the product descriptor to the CP2130 OTP ROM
 void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errstr)
 {
-    int strsize = product.size();
-    if (strsize > 62) {
+    size_t strsize = static_cast<size_t>(product.size());
+    if (strsize > DESCMAX_PRODUCT) {
         errcnt += 1;
-        errstr.append(QObject::tr("In writeProductDesc(): product descriptor string cannot be longer than 62 characters.\n"));  // Program logic error
+        errstr += QObject::tr("In writeProductDesc(): product descriptor string cannot be longer than 62 characters.\n");  // Program logic error
     } else {
-        int length = 2 * strsize + 2;
-        unsigned char controlBufferOut[64] = {
-            static_cast<quint8>(length),  // USB string descriptor length
-            0x03                          // USB string descriptor constant
-        };
-        quint16 bufsize = static_cast<quint16>(sizeof(controlBufferOut));
-        for (int i = 2; i < bufsize - 1; ++i) {
-            if (i < length) {
-                controlBufferOut[i] = static_cast<quint8>(product[(i - 2) / 2].unicode() >> (i % 2 == 0 ? 0 : 8));  // If index is even, value will correspond to the LSB of the UTF-16 character, otherwise it will correspond to the MSB of the same
-            } else {
-                controlBufferOut[i] = 0x00;
-            }
-        }
-        controlBufferOut[bufsize - 1] = 0x00;  // The last byte of the first table is reserved, so it should be set to zero
-        controlTransfer(SET, SET_PRODUCT_STRING_1, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
-        for (int i = 0; i < bufsize; ++i) {
-            if (i < length - 63) {
-                controlBufferOut[i] = static_cast<quint8>(product[(i + 61) / 2].unicode() >> (i % 2 == 0 ? 8 : 0));  // If index is even, value will correspond to the MSB of the UTF-16 character, otherwise it will correspond to the LSB of the same
-            } else {
-                controlBufferOut[i] = 0x00;  // Note that, inherently, the last byte of the second table will always be set to zero
-            }
-        }
-        controlTransfer(SET, SET_PRODUCT_STRING_2, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        writeDescGeneric(product, SET_PRODUCT_STRING_1, 2, errcnt, errstr);  // Refactored in version 2.1.0
     }
 }
 
@@ -1022,24 +1002,12 @@ void CP2130::writePROMConfig(const PROMConfig &config, int &errcnt, QString &err
 // Writes the serial descriptor to the CP2130 OTP ROM
 void CP2130::writeSerialDesc(const QString &serial, int &errcnt, QString &errstr)
 {
-    int strsize = serial.size();
-    if (strsize > 30) {
+    size_t strsize = static_cast<size_t>(serial.size());
+    if (strsize > DESCMAX_SERIAL) {
         errcnt += 1;
-        errstr.append(QObject::tr("In writeSerialDesc(): serial descriptor string cannot be longer than 30 characters.\n"));  // Program logic error
+        errstr += QObject::tr("In writeSerialDesc(): serial descriptor string cannot be longer than 30 characters.\n");  // Program logic error
     } else {
-        unsigned char controlBufferOut[64] = {
-            static_cast<quint8>(2 * strsize + 2),  // USB string descriptor length
-            0x03                                   // USB string descriptor constant
-        };
-        quint16 bufsize = static_cast<quint16>(sizeof(controlBufferOut));
-        for (int i = 2; i < bufsize; ++i) {
-            if (i < controlBufferOut[0]) {  // If index is lesser than the USB descriptor length
-                controlBufferOut[i] = static_cast<quint8>(serial[(i - 2) / 2].unicode() >> (i % 2 == 0 ? 0 : 8));  // If index is even, value will correspond to the LSB of the UTF-16 character, otherwise it will correspond to the MSB of the same
-            } else {
-                controlBufferOut[i] = 0x00;  // Note that, inherently, the last two bytes will always be set to zero
-            }
-        }
-        controlTransfer(SET, SET_SERIAL_STRING, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        writeDescGeneric(serial, SET_SERIAL_STRING, 1, errcnt, errstr);  // Refactored in version 2.1.0
     }
 }
 
@@ -1065,23 +1033,22 @@ QStringList CP2130::listDevices(quint16 vid, quint16 pid, int &errcnt, QString &
     libusb_context *context;
     if (libusb_init(&context) != 0) {  // Initialize libusb. In case of failure
         errcnt += 1;
-        errstr.append(QObject::tr("Could not initialize libusb.\n"));
+        errstr += QObject::tr("Could not initialize libusb.\n");
     } else {  // If libusb is initialized
         libusb_device **devs;
         ssize_t devlist = libusb_get_device_list(context, &devs);  // Get a device list
         if (devlist < 0) {  // If the previous operation fails to get a device list
             errcnt += 1;
-            errstr.append(QObject::tr("Failed to retrieve a list of devices.\n"));
+            errstr += QObject::tr("Failed to retrieve a list of devices.\n");
         } else {
             for (ssize_t i = 0; i < devlist; ++i) {  // Run through all listed devices
                 struct libusb_device_descriptor desc;
-                if (libusb_get_device_descriptor(devs[i], &desc) == 0 && desc.idVendor == vid && desc.idProduct == pid) {  // If the device descriptor is retrieved, and both VID and PID correspond to the ITUSB2 USB Test Switch
-                    libusb_device_handle *handle;
+                if (libusb_get_device_descriptor(devs[i], &desc) == 0 && desc.idVendor == vid && desc.idProduct == pid) {  // If the device descriptor is retrieved, and both VID and PID correspond to the respective given values
                     if (libusb_open(devs[i], &handle) == 0) {  // Open the listed device. If successfull
                         unsigned char str_desc[256];
                         libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, str_desc, static_cast<int>(sizeof(str_desc)));  // Get the serial number string in ASCII format
                         QString serial;
-                        devices.append(serial.fromLocal8Bit(reinterpret_cast<char *>(str_desc)));  // Append the serial number string to the list
+                        devices += serial.fromLocal8Bit(reinterpret_cast<char *>(str_desc));  // Append the serial number string to the list
                         libusb_close(handle);  // Close the device
                     }
                 }
