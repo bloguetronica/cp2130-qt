@@ -1044,6 +1044,7 @@ QStringList CP2130::listDevices(quint16 vid, quint16 pid, int &errcnt, QString &
             for (ssize_t i = 0; i < devlist; ++i) {  // Run through all listed devices
                 struct libusb_device_descriptor desc;
                 if (libusb_get_device_descriptor(devs[i], &desc) == 0 && desc.idVendor == vid && desc.idProduct == pid) {  // If the device descriptor is retrieved, and both VID and PID correspond to the respective given values
+                    libusb_device_handle *handle;
                     if (libusb_open(devs[i], &handle) == 0) {  // Open the listed device. If successfull
                         unsigned char str_desc[256];
                         libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, str_desc, static_cast<int>(sizeof(str_desc)));  // Get the serial number string in ASCII format
