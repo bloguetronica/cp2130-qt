@@ -28,26 +28,61 @@ extern "C" {
 // Definitions
 const unsigned int TR_TIMEOUT = 500;  // Transfer timeout in milliseconds (increased to 500ms since version 2.0.2)
 
-// Private generic procedure used to write any descriptor (added as a refactor in version 2.1.0)
-void CP2130::writeDescGeneric(const QString &descriptor, quint8 command, int tables, int &errcnt, QString &errstr)
+// Specific to getDescGeneric() and writeDescGeneric()
+const quint16 DESC_TBLSIZE = 0x0040;           // Descriptor table size, including preamble [64]
+const size_t DESC_MAXIDX = DESC_TBLSIZE - 2;   // Maximum usable index [62]
+const size_t DESC_IDXINCR = DESC_TBLSIZE - 1;  // Index increment or step between table preambles [63]
+
+// Private generic procedure used to get any descriptor (added as a refactor in version 2.1.0)
+QString CP2130::getDescGeneric(quint8 command, int &errcnt, QString &errstr)
 {
-    int length = 2 * descriptor.size() + 2;
-    const quint16 bufsize = 64;  // To be declared outside
-    unsigned char controlBufferOut[bufsize] = {
+    unsigned char controlBufferIn[DESC_TBLSIZE];
+    controlTransfer(GET, command, 0x0000, 0x0000, controlBufferIn, DESC_TBLSIZE, errcnt, errstr);
+    QString product;
+    size_t length = controlBufferIn[0];
+    size_t end = length > DESC_MAXIDX ? DESC_MAXIDX : length;
+    for (size_t i = 2; i < end; i += 2) {  // Process first 30 characters (bytes 2-61 of the array)
+        if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Filter out null characters
+            product += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
+        }
+    }
+    if ((command == GET_MANUFACTURING_STRING_1 || command == GET_PRODUCT_STRING_1) && length > DESC_MAXIDX) {
+        quint16 midchar = controlBufferIn[DESC_MAXIDX];  // Char in the middle (parted between two tables)
+        controlTransfer(GET, command + 2, 0x0000, 0x0000, controlBufferIn, DESC_TBLSIZE, errcnt, errstr);
+        midchar = static_cast<quint16>(controlBufferIn[0] << 8 | midchar);  // Reconstruct the char in the middle
+        if (midchar != 0x0000) {  // Filter out the reconstructed char if the same is null
+            product += QChar(midchar);
+        }
+        end = length - DESC_IDXINCR;
+        for (size_t i = 1; i < end; i += 2) {  // Process remaining characters, up to 31 (bytes 1-62 of the array)
+            if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Again, filter out null characters
+                product += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
+            }
+        }
+    }
+    return product;
+}
+
+// Private generic procedure used to write any descriptor (added as a refactor in version 2.1.0)
+void CP2130::writeDescGeneric(const QString &descriptor, quint8 command, int &errcnt, QString &errstr)
+{
+    size_t length = 2 * descriptor.size() + 2;
+    unsigned char controlBufferOut[DESC_TBLSIZE] = {  // It is important to initialize the array in this manner, here, so that the remaining indexes are filled with zeros!
         static_cast<quint8>(length),  // USB string descriptor length
         0x03                          // USB string descriptor constant
     };
-    for (int i = 0; i < tables; ++i) {
-        int start = i == 0 ? 2 : 0;
-        int offset = 63 * i;
-        for (int j = start; j < bufsize - 1; ++j) {
+    size_t ntables = command == SET_MANUFACTURING_STRING_1 || command == SET_PRODUCT_STRING_1 ? 2 : 1;  // Number of tables to write
+    for (size_t i = 0; i < ntables; ++i) {
+        size_t start = i == 0 ? 2 : 0;
+        size_t offset = DESC_IDXINCR * i;
+        for (size_t j = start; j < DESC_IDXINCR; ++j) {
             if (j < length - offset) {
-                controlBufferOut[j] = static_cast<quint8>(descriptor[(offset + j - 2) / 2].unicode() >> ((i + j) % 2 == 0 ? 0 : 8));
+                controlBufferOut[j] = static_cast<quint8>(descriptor[static_cast<int>((offset + j - 2) / 2)].unicode() >> ((i + j) % 2 == 0 ? 0 : 8));
             } else {
                 controlBufferOut[j] = 0x00;
             }
         }
-        controlTransfer(SET, command + 2 * i, PROM_WRITE_KEY, 0x0000, controlBufferOut, bufsize, errcnt, errstr);
+        controlTransfer(SET, command + 2 * i, PROM_WRITE_KEY, 0x0000, controlBufferOut, DESC_TBLSIZE, errcnt, errstr);
     }
 }
 
@@ -228,12 +263,12 @@ void CP2130::configureGPIO(quint8 pin, quint8 mode, bool value,  int &errcnt, QS
         errcnt += 1;
         errstr += QObject::tr("In configureGPIO(): Pin number must be between 0 and 10.\n");  // Program logic error
     } else {
-        unsigned char controlBufferOut[3] = {
+        unsigned char controlBufferOut[SET_GPIO_MODE_AND_LEVEL_WLEN] = {
             pin,   // Selected GPIO pin
             mode,  // Pin mode (see the values applicable to PinConfig/getPinConfig()/writePinConfig())
             value  // Output value (when applicable)
         };
-        controlTransfer(SET, SET_GPIO_MODE_AND_LEVEL, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+        controlTransfer(SET, SET_GPIO_MODE_AND_LEVEL, 0x0000, 0x0000, controlBufferOut, SET_GPIO_MODE_AND_LEVEL_WLEN, errcnt, errstr);
     }
 }
 
@@ -244,14 +279,14 @@ void CP2130::configureSPIDelays(quint8 channel, const SPIDelays &delays, int &er
         errcnt += 1;
         errstr += QObject::tr("In configureSPIDelays(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
-        unsigned char controlBufferOut[8] = {
+        unsigned char controlBufferOut[SET_SPI_DELAY_WLEN] = {
             channel,                                                                                                    // Selected channel
             static_cast<quint8>(delays.cstglen << 3 | delays.prdasten << 2 | delays.pstasten << 1 | (delays.itbyten)),  // SPI enable mask (chip select toggle, pre-deassert, post-assert and inter-byte delay enable bits)
             static_cast<quint8>(delays.itbytdly >> 8), static_cast<quint8>(delays.itbytdly),                            // Inter-byte delay
             static_cast<quint8>(delays.pstastdly >> 8), static_cast<quint8>(delays.pstastdly),                          // Post-assert delay
             static_cast<quint8>(delays.prdastdly >> 8), static_cast<quint8>(delays.prdastdly)                           // Pre-deassert delay
         };
-        controlTransfer(SET, SET_SPI_DELAY, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+        controlTransfer(SET, SET_SPI_DELAY, 0x0000, 0x0000, controlBufferOut, SET_SPI_DELAY_WLEN, errcnt, errstr);
     }
 }
 
@@ -262,11 +297,11 @@ void CP2130::configureSPIMode(quint8 channel, const SPIMode &mode, int &errcnt, 
         errcnt += 1;
         errstr += QObject::tr("In configureSPIMode(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
-        unsigned char controlBufferOut[2] = {
+        unsigned char controlBufferOut[SET_SPI_WORD_WLEN] = {
             channel,                                                                                      // Selected channel
             static_cast<quint8>(mode.cpha << 5 | mode.cpol << 4 | mode.csmode << 3 | (0x07 & mode.cfrq))  // Control word (specified chip select mode, clock frequency, polarity and phase)
         };
-        controlTransfer(SET, SET_SPI_WORD, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+        controlTransfer(SET, SET_SPI_WORD, 0x0000, 0x0000, controlBufferOut, SET_SPI_WORD_WLEN, errcnt, errstr);
     }
 }
 
@@ -295,11 +330,11 @@ void CP2130::disableCS(quint8 channel, int &errcnt, QString &errstr)
         errcnt += 1;
         errstr += QObject::tr("In disableCS(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
-        unsigned char controlBufferOut[2] = {
+        unsigned char controlBufferOut[SET_GPIO_CHIP_SELECT_WLEN] = {
             channel,  // Selected channel
             0x00      // Corresponding chip select disabled
         };
-        controlTransfer(SET, SET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+        controlTransfer(SET, SET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferOut, SET_GPIO_CHIP_SELECT_WLEN, errcnt, errstr);
     }
 }
 
@@ -310,14 +345,14 @@ void CP2130::disableSPIDelays(quint8 channel, int &errcnt, QString &errstr)
         errcnt += 1;
         errstr += QObject::tr("In disableSPIDelays(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
-        unsigned char controlBufferOut[8] = {
+        unsigned char controlBufferOut[SET_SPI_DELAY_WLEN] = {
             channel,     // Selected channel
             0x00,        // All SPI delays disabled, no CS toggle
             0x00, 0x00,  // Inter-byte,
             0x00, 0x00,  // post-assert and
             0x00, 0x00   // pre-deassert delays all set to 0us
         };
-        controlTransfer(SET, SET_SPI_DELAY, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+        controlTransfer(SET, SET_SPI_DELAY, 0x0000, 0x0000, controlBufferOut, SET_SPI_DELAY_WLEN, errcnt, errstr);
     }
 }
 
@@ -328,19 +363,19 @@ void CP2130::enableCS(quint8 channel, int &errcnt, QString &errstr)
         errcnt += 1;
         errstr += QObject::tr("In enableCS(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
-        unsigned char controlBufferOut[2] = {
+        unsigned char controlBufferOut[SET_GPIO_CHIP_SELECT_WLEN] = {
             channel,  // Selected channel
             0x01      // Corresponding chip select enabled
         };
-        controlTransfer(SET, SET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+        controlTransfer(SET, SET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferOut, SET_GPIO_CHIP_SELECT_WLEN, errcnt, errstr);
     }
 }
 
 // Returns the current clock divider value
 quint8 CP2130::getClockDivider(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[1];
-    controlTransfer(GET, GET_CLOCK_DIVIDER, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_CLOCK_DIVIDER_WLEN];
+    controlTransfer(GET, GET_CLOCK_DIVIDER, 0x0000, 0x0000, controlBufferIn, GET_CLOCK_DIVIDER_WLEN, errcnt, errstr);
     return controlBufferIn[0];
 }
 
@@ -353,8 +388,8 @@ bool CP2130::getCS(quint8 channel, int &errcnt, QString &errstr)
         errstr += QObject::tr("In getCS(): SPI channel value must be between 0 and 10.\n");  // Program logic error
         cs = false;
     } else {
-        unsigned char controlBufferIn[4];
-        controlTransfer(GET, GET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+        unsigned char controlBufferIn[GET_GPIO_CHIP_SELECT_WLEN];
+        controlTransfer(GET, GET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferIn, GET_GPIO_CHIP_SELECT_WLEN, errcnt, errstr);
         cs = (0x01 << channel & (controlBufferIn[0] << 8 | controlBufferIn[1])) != 0x00;
     }
     return cs;
@@ -375,8 +410,8 @@ quint8 CP2130::getEndpointOutAddr(int &errcnt, QString &errstr)
 // Gets the event counter, including mode and value
 CP2130::EventCounter CP2130::getEventCounter(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[3];
-    controlTransfer(GET, GET_EVENT_COUNTER, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_EVENT_COUNTER_WLEN];
+    controlTransfer(GET, GET_EVENT_COUNTER, 0x0000, 0x0000, controlBufferIn, GET_EVENT_COUNTER_WLEN, errcnt, errstr);
     CP2130::EventCounter evtcntr;
     evtcntr.overflow = (0x80 & controlBufferIn[0]) != 0x00;                              // Event counter overflow bit corresponds to bit 7 of byte 0
     evtcntr.mode = 0x07 & controlBufferIn[0];                                            // GPIO.4/EVTCNTR pin mode corresponds to bits 3:0 of byte 0
@@ -387,8 +422,8 @@ CP2130::EventCounter CP2130::getEventCounter(int &errcnt, QString &errstr)
 // Gets the full FIFO threshold
 quint8 CP2130::getFIFOThreshold(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[1];
-    controlTransfer(GET, GET_FULL_THRESHOLD, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_FULL_THRESHOLD_WLEN];
+    controlTransfer(GET, GET_FULL_THRESHOLD, 0x0000, 0x0000, controlBufferIn, GET_FULL_THRESHOLD_WLEN, errcnt, errstr);
     return controlBufferIn[0];
 }
 
@@ -461,55 +496,30 @@ bool CP2130::getGPIO10(int &errcnt, QString &errstr)
 // Returns the value of all GPIO pins on the CP2130, in bitmap format
 quint16 CP2130::getGPIOs(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[2];
-    controlTransfer(GET, GET_GPIO_VALUES, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_GPIO_VALUES_WLEN];
+    controlTransfer(GET, GET_GPIO_VALUES, 0x0000, 0x0000, controlBufferIn, GET_GPIO_VALUES_WLEN, errcnt, errstr);
     return static_cast<quint16>(BMGPIOS & (controlBufferIn[0] << 8 | controlBufferIn[1]));  // Returns the value of every GPIO pin in bitmap format (big-endian conversion)
 }
 
 // Returns the lock word from the CP2130 OTP ROM
 quint16 CP2130::getLockWord(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[2];
-    controlTransfer(GET, GET_LOCK_BYTE, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_LOCK_BYTE_WLEN];
+    controlTransfer(GET, GET_LOCK_BYTE, 0x0000, 0x0000, controlBufferIn, GET_LOCK_BYTE_WLEN, errcnt, errstr);
     return static_cast<quint16>(controlBufferIn[1] << 8 | controlBufferIn[0]);  // Returns both lock bytes as a word (little-endian conversion)
 }
 
 // Gets the manufacturer descriptor from the CP2130 OTP ROM
 QString CP2130::getManufacturerDesc(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[64];
-    quint16 bufsize = static_cast<quint16>(sizeof(controlBufferIn));
-    controlTransfer(GET, GET_MANUFACTURING_STRING_1, 0x0000, 0x0000, controlBufferIn, bufsize, errcnt, errstr);
-    QString manufacturer;
-    size_t length = controlBufferIn[0];
-    size_t end = length > 62 ? 62 : length;
-    for (size_t i = 2; i < end; i += 2) {  // Process first 30 characters (bytes 2-61 of the array)
-        if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Filter out null characters
-            manufacturer += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
-        }
-    }
-    if (length > 62) {
-        quint16 midchar = controlBufferIn[62];  // Char in the middle (parted between two tables)
-        controlTransfer(GET, GET_MANUFACTURING_STRING_2, 0x0000, 0x0000, controlBufferIn, bufsize, errcnt, errstr);
-        midchar = static_cast<quint16>(controlBufferIn[0] << 8 | midchar);  // Reconstruct the char in the middle
-        if (midchar != 0x0000) {  // Filter out the reconstructed char if the same is null
-            manufacturer += QChar(midchar);
-        }
-        end = length - 63;
-        for (size_t i = 1; i < end; i += 2) {  // Process remaining characters, up to 31 (bytes 1-62 of the array)
-            if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Again, filter out null characters
-                manufacturer += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
-            }
-        }
-    }
-    return manufacturer;
+    return getDescGeneric(GET_MANUFACTURING_STRING_1, errcnt, errstr);
 }
 
 // Gets the pin configuration from the CP2130 OTP ROM
 CP2130::PinConfig CP2130::getPinConfig(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[20];
-    controlTransfer(GET, GET_PIN_CONFIG, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_PIN_CONFIG_WLEN];
+    controlTransfer(GET, GET_PIN_CONFIG, 0x0000, 0x0000, controlBufferIn, GET_PIN_CONFIG_WLEN, errcnt, errstr);
     PinConfig config;
     config.gpio0 = controlBufferIn[0];                                                        // GPIO.0 pin config corresponds to byte 0
     config.gpio1 = controlBufferIn[1];                                                        // GPIO.1 pin config corresponds to byte 1
@@ -533,32 +543,7 @@ CP2130::PinConfig CP2130::getPinConfig(int &errcnt, QString &errstr)
 // Gets the product descriptor from the CP2130 OTP ROM
 QString CP2130::getProductDesc(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[64];
-    quint16 bufsize = static_cast<quint16>(sizeof(controlBufferIn));
-    controlTransfer(GET, GET_PRODUCT_STRING_1, 0x0000, 0x0000, controlBufferIn, bufsize, errcnt, errstr);
-    QString product;
-    size_t length = controlBufferIn[0];
-    size_t end = length > 62 ? 62 : length;
-    for (size_t i = 2; i < end; i += 2) {  // Process first 30 characters (bytes 2-61 of the array)
-        if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Filter out null characters
-            product += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
-        }
-    }
-    if (length > 62) {
-        quint16 midchar = controlBufferIn[62];  // Char in the middle (parted between two tables)
-        controlTransfer(GET, GET_PRODUCT_STRING_2, 0x0000, 0x0000, controlBufferIn, bufsize, errcnt, errstr);
-        midchar = static_cast<quint16>(controlBufferIn[0] << 8 | midchar);  // Reconstruct the char in the middle
-        if (midchar != 0x0000) {  // Filter out the reconstructed char if the same is null
-            product += QChar(midchar);
-        }
-        end = length - 63;
-        for (size_t i = 1; i < end; i += 2) {  // Process remaining characters, up to 31 (bytes 1-62 of the array)
-            if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Again, filter out null characters
-                product += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
-            }
-        }
-    }
-    return product;
+    return getDescGeneric(GET_PRODUCT_STRING_1, errcnt, errstr);
 }
 
 // Gets the entire CP2130 OTP ROM content as a structure of eight 64-byte blocks
@@ -566,9 +551,9 @@ CP2130::PROMConfig CP2130::getPROMConfig(int &errcnt, QString &errstr)
 {
     PROMConfig config;
     for (size_t i = 0; i < PROM_BLOCKS; ++i) {
-        unsigned char controlBufferIn[PROM_BLOCK_SIZE];
-        controlTransfer(GET, GET_PROM_CONFIG, 0x0000, static_cast<quint16>(i), controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-        for (size_t j = 0; j < PROM_BLOCK_SIZE; ++j) {
+        unsigned char controlBufferIn[GET_PROM_CONFIG_WLEN];
+        controlTransfer(GET, GET_PROM_CONFIG, 0x0000, static_cast<quint16>(i), controlBufferIn, GET_PROM_CONFIG_WLEN, errcnt, errstr);
+        for (size_t j = 0; j < GET_PROM_CONFIG_WLEN; ++j) {
             config.blocks[i][j] = controlBufferIn[j];
         }
     }
@@ -578,22 +563,14 @@ CP2130::PROMConfig CP2130::getPROMConfig(int &errcnt, QString &errstr)
 // Gets the serial descriptor from the CP2130 OTP ROM
 QString CP2130::getSerialDesc(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[64];
-    controlTransfer(GET, GET_SERIAL_STRING, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
-    QString serial;
-    for (size_t i = 2; i < controlBufferIn[0]; i += 2) {
-        if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Filter out null characters
-            serial += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
-        }
-    }
-    return serial;
+    return getDescGeneric(GET_SERIAL_STRING, errcnt, errstr);
 }
 
 // Returns the CP2130 silicon, read-only version
 CP2130::SiliconVersion CP2130::getSiliconVersion(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[2];
-    controlTransfer(GET, GET_READONLY_VERSION, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_READONLY_VERSION_WLEN];
+    controlTransfer(GET, GET_READONLY_VERSION, 0x0000, 0x0000, controlBufferIn, GET_READONLY_VERSION_WLEN, errcnt, errstr);
     SiliconVersion version;
     version.maj = controlBufferIn[0];  // Major read-only version corresponds to byte 0
     version.min = controlBufferIn[1];  // Minor read-only version corresponds to byte 1
@@ -609,8 +586,8 @@ CP2130::SPIDelays CP2130::getSPIDelays(quint8 channel, int &errcnt, QString &err
         errstr += QObject::tr("In getSPIDelays(): SPI channel value must be between 0 and 10.\n");  // Program logic error
         delays = {false, false, false, false, 0x0000, 0x0000, 0x0000};
     } else {
-        unsigned char controlBufferIn[8];
-        controlTransfer(GET, GET_SPI_DELAY, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+        unsigned char controlBufferIn[GET_SPI_DELAY_WLEN];
+        controlTransfer(GET, GET_SPI_DELAY, 0x0000, 0x0000, controlBufferIn, GET_SPI_DELAY_WLEN, errcnt, errstr);
         delays.cstglen = (0x08 & controlBufferIn[1]) != 0x00;                                   // CS toggle enable corresponds to bit 3 of byte 1
         delays.prdasten = (0x04 & controlBufferIn[1]) != 0x00;                                  // Pre-deassert delay enable corresponds to bit 2 of byte 1
         delays.pstasten = (0x02 & controlBufferIn[1]) != 0x00;                                  // Post-assert delay enable to bit 1 of byte 1
@@ -631,8 +608,8 @@ CP2130::SPIMode CP2130::getSPIMode(quint8 channel, int &errcnt, QString &errstr)
         errstr += QObject::tr("In getSPIMode(): SPI channel value must be between 0 and 10.\n");  // Program logic error
         mode = {false, 0x00, false, false};
     } else {
-        unsigned char controlBufferIn[11];
-        controlTransfer(GET, GET_SPI_WORD, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+        unsigned char controlBufferIn[GET_SPI_WORD_WLEN];
+        controlTransfer(GET, GET_SPI_WORD, 0x0000, 0x0000, controlBufferIn, GET_SPI_WORD_WLEN, errcnt, errstr);
         mode.csmode = (0x08 & controlBufferIn[channel]) != 0x00;  // Chip select mode corresponds to bit 3
         mode.cfrq = 0x07 & controlBufferIn[channel];              // Clock frequency is set in the bits 2:0
         mode.cpha = (0x20 & controlBufferIn[channel]) != 0x00;    // Clock phase corresponds to bit 5
@@ -650,8 +627,8 @@ quint8 CP2130::getTransferPriority(int &errcnt, QString &errstr)
 // Gets the USB configuration, including VID, PID, major and minor release versions, from the CP2130 OTP ROM
 CP2130::USBConfig CP2130::getUSBConfig(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[9];
-    controlTransfer(GET, GET_USB_CONFIG, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_USB_CONFIG_WLEN];
+    controlTransfer(GET, GET_USB_CONFIG, 0x0000, 0x0000, controlBufferIn, GET_USB_CONFIG_WLEN, errcnt, errstr);
     USBConfig config;
     config.vid = static_cast<quint16>(controlBufferIn[1] << 8 | controlBufferIn[0]);  // VID corresponds to bytes 0 and 1 (little-endian conversion)
     config.pid = static_cast<quint16>(controlBufferIn[3] << 8 | controlBufferIn[2]);  // PID corresponds to bytes 2 and 3 (little-endian conversion)
@@ -678,8 +655,8 @@ bool CP2130::isOTPLocked(int &errcnt, QString &errstr)
 // Returns true if a ReadWithRTR command is currently active
 bool CP2130::isRTRActive(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferIn[1];
-    controlTransfer(GET, GET_RTR_STATE, 0x0000, 0x0000, controlBufferIn, static_cast<quint16>(sizeof(controlBufferIn)), errcnt, errstr);
+    unsigned char controlBufferIn[GET_RTR_STATE_WLEN];
+    controlTransfer(GET, GET_RTR_STATE, 0x0000, 0x0000, controlBufferIn, GET_RTR_STATE_WLEN, errcnt, errstr);
     return controlBufferIn[0] == 0x01;
 }
 
@@ -733,7 +710,7 @@ int CP2130::open(quint16 vid, quint16 pid, const QString &serial)
 // Issues a reset to the CP2130
 void CP2130::reset(int &errcnt, QString &errstr)
 {
-    controlTransfer(SET, RESET_DEVICE, 0x0000, 0x0000, nullptr, 0, errcnt, errstr);
+    controlTransfer(SET, RESET_DEVICE, 0x0000, 0x0000, nullptr, RESET_DEVICE_WLEN, errcnt, errstr);
 }
 
 // Enables the chip select of the target channel, disabling any others
@@ -743,40 +720,40 @@ void CP2130::selectCS(quint8 channel, int &errcnt, QString &errstr)
         errcnt += 1;
         errstr += QObject::tr("In selectCS(): SPI channel value must be between 0 and 10.\n");  // Program logic error
     } else {
-        unsigned char controlBufferOut[2] = {
+        unsigned char controlBufferOut[SET_GPIO_CHIP_SELECT_WLEN] = {
             channel,  // Selected channel
             0x02      // Only the corresponding chip select is enabled, all the others are disabled
         };
-        controlTransfer(SET, SET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+        controlTransfer(SET, SET_GPIO_CHIP_SELECT, 0x0000, 0x0000, controlBufferOut, SET_GPIO_CHIP_SELECT_WLEN, errcnt, errstr);
     }
 }
 
 // Sets the clock divider value
 void CP2130::setClockDivider(quint8 value, int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[1] = {
+    unsigned char controlBufferOut[SET_CLOCK_DIVIDER_WLEN] = {
         value  // Intended clock divider value (GPIO.5 clock frequency = 24 MHz / divider)
     };
-    controlTransfer(SET, SET_CLOCK_DIVIDER, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_CLOCK_DIVIDER, 0x0000, 0x0000, controlBufferOut, SET_CLOCK_DIVIDER_WLEN, errcnt, errstr);
 }
 
 // Sets the event counter
 void CP2130::setEventCounter(const EventCounter &evcntr, int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[3] = {
+    unsigned char controlBufferOut[GET_EVENT_COUNTER_WLEN] = {
         static_cast<quint8>(0x07 & evcntr.mode),                                   // Set GPIO.4/EVTCNTR pin mode
         static_cast<quint8>(evcntr.value >> 8), static_cast<quint8>(evcntr.value)  // Set the event count value
     };
-    controlTransfer(SET, SET_EVENT_COUNTER, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_EVENT_COUNTER, 0x0000, 0x0000, controlBufferOut, GET_EVENT_COUNTER_WLEN, errcnt, errstr);
 }
 
 // Sets the full FIFO threshold
 void CP2130::setFIFOThreshold(quint8 threshold, int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[1] = {
+    unsigned char controlBufferOut[SET_FULL_THRESHOLD_WLEN] = {
         threshold  // Intended FIFO threshold
     };
-    controlTransfer(SET, SET_FULL_THRESHOLD, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_FULL_THRESHOLD, 0x0000, 0x0000, controlBufferOut, SET_FULL_THRESHOLD_WLEN, errcnt, errstr);
 }
 
 // Sets the GPIO.0 pin on the CP2130 to a given value
@@ -848,11 +825,11 @@ void CP2130::setGPIO10(bool value, int &errcnt, QString &errstr)
 // Sets one or more GPIO pins on the CP2130 to the intended values, according to the values and mask bitmaps
 void CP2130::setGPIOs(quint16 bmValues, quint16 bmMask, int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[4] = {
+    unsigned char controlBufferOut[SET_GPIO_VALUES_WLEN] = {
         static_cast<quint8>((BMGPIOS & bmValues) >> 8), static_cast<quint8>(BMGPIOS & bmValues),  // GPIO values bitmap
         static_cast<quint8>((BMGPIOS & bmMask) >> 8), static_cast<quint8>(BMGPIOS & bmMask)       // Mask bitmap
     };
-    controlTransfer(SET, SET_GPIO_VALUES, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_GPIO_VALUES, 0x0000, 0x0000, controlBufferOut, SET_GPIO_VALUES_WLEN, errcnt, errstr);
 }
 
 // Requests and reads the given number of bytes from the SPI bus, and then returns a vector
@@ -924,19 +901,19 @@ void CP2130::spiWrite(const QVector<quint8> &data, int &errcnt, QString &errstr)
 // Aborts the current ReadWithRTR command
 void CP2130::stopRTR(int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[1] = {
+    unsigned char controlBufferOut[SET_RTR_STOP_WLEN] = {
         0x01  // Abort current ReadWithRTR command
     };
-    controlTransfer(SET, SET_RTR_STOP, 0x0000, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_RTR_STOP, 0x0000, 0x0000, controlBufferOut, SET_RTR_STOP_WLEN, errcnt, errstr);
 }
 
 // This procedure is used to lock fields in the CP2130 OTP ROM - Use with care!
 void CP2130::writeLockWord(quint16 word, int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[2] = {
+    unsigned char controlBufferOut[SET_LOCK_BYTE_WLEN] = {
         static_cast<quint8>(word), static_cast<quint8>(word >> 8)  // Sets both lock bytes to the intended value
     };
-    controlTransfer(SET, SET_LOCK_BYTE, PROM_WRITE_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_LOCK_BYTE, PROM_WRITE_KEY, 0x0000, controlBufferOut, SET_LOCK_BYTE_WLEN, errcnt, errstr);
 }
 
 // Writes the manufacturer descriptor to the CP2130 OTP ROM
@@ -947,14 +924,14 @@ void CP2130::writeManufacturerDesc(const QString &manufacturer, int &errcnt, QSt
         errcnt += 1;
         errstr += QObject::tr("In writeManufacturerDesc(): manufacturer descriptor string cannot be longer than 62 characters.\n");  // Program logic error
     } else {
-        writeDescGeneric(manufacturer, SET_MANUFACTURING_STRING_1, 2, errcnt, errstr);  // Refactored in version 2.1.0
+        writeDescGeneric(manufacturer, SET_MANUFACTURING_STRING_1, errcnt, errstr);  // Refactored in version 2.1.0
     }
 }
 
 // Writes the pin configuration to the CP2130 OTP ROM
 void CP2130::writePinConfig(const PinConfig &config, int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[20] = {
+    unsigned char controlBufferOut[SET_PIN_CONFIG_WLEN] = {
         config.gpio0,                                                                              // GPIO.0 pin config
         config.gpio1,                                                                              // GPIO.1 pin config
         config.gpio2,                                                                              // GPIO.2 pin config
@@ -972,7 +949,7 @@ void CP2130::writePinConfig(const PinConfig &config, int &errcnt, QString &errst
         static_cast<quint8>(0x7F & config.wkupmatch >> 8), static_cast<quint8>(config.wkupmatch),  // Wakeup pin match bitmap
         config.divider                                                                             // Clock divider
     };
-    controlTransfer(SET, SET_PIN_CONFIG, PROM_WRITE_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_PIN_CONFIG, PROM_WRITE_KEY, 0x0000, controlBufferOut, SET_PIN_CONFIG_WLEN, errcnt, errstr);
 }
 
 // Writes the product descriptor to the CP2130 OTP ROM
@@ -983,7 +960,7 @@ void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errs
         errcnt += 1;
         errstr += QObject::tr("In writeProductDesc(): product descriptor string cannot be longer than 62 characters.\n");  // Program logic error
     } else {
-        writeDescGeneric(product, SET_PRODUCT_STRING_1, 2, errcnt, errstr);  // Refactored in version 2.1.0
+        writeDescGeneric(product, SET_PRODUCT_STRING_1, errcnt, errstr);  // Refactored in version 2.1.0
     }
 }
 
@@ -991,11 +968,11 @@ void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errs
 void CP2130::writePROMConfig(const PROMConfig &config, int &errcnt, QString &errstr)
 {
     for (size_t i = 0; i < PROM_BLOCKS; ++i) {
-        unsigned char controlBufferOut[PROM_BLOCK_SIZE];
-        for (size_t j = 0; j < PROM_BLOCK_SIZE; ++j) {
+        unsigned char controlBufferOut[SET_PROM_CONFIG_WLEN];
+        for (size_t j = 0; j < SET_PROM_CONFIG_WLEN; ++j) {
             controlBufferOut[j] = config.blocks[i][j];
         }
-        controlTransfer(SET, SET_PROM_CONFIG, PROM_WRITE_KEY, static_cast<quint16>(i), controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+        controlTransfer(SET, SET_PROM_CONFIG, PROM_WRITE_KEY, static_cast<quint16>(i), controlBufferOut, SET_PROM_CONFIG_WLEN, errcnt, errstr);
     }
 }
 
@@ -1007,14 +984,14 @@ void CP2130::writeSerialDesc(const QString &serial, int &errcnt, QString &errstr
         errcnt += 1;
         errstr += QObject::tr("In writeSerialDesc(): serial descriptor string cannot be longer than 30 characters.\n");  // Program logic error
     } else {
-        writeDescGeneric(serial, SET_SERIAL_STRING, 1, errcnt, errstr);  // Refactored in version 2.1.0
+        writeDescGeneric(serial, SET_SERIAL_STRING, errcnt, errstr);  // Refactored in version 2.1.0
     }
 }
 
 // Writes the USB configuration to the CP2130 OTP ROM
 void CP2130::writeUSBConfig(const USBConfig &config, quint8 mask, int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[10] = {
+    unsigned char controlBufferOut[SET_USB_CONFIG_WLEN] = {
         static_cast<quint8>(config.vid), static_cast<quint8>(config.vid >> 8),  // VID
         static_cast<quint8>(config.pid), static_cast<quint8>(config.pid >> 8),  // PID
         config.maxpow,                                                          // Maximum consumption current
@@ -1023,7 +1000,7 @@ void CP2130::writeUSBConfig(const USBConfig &config, quint8 mask, int &errcnt, Q
         config.trfprio,                                                         // Transfer priority
         mask                                                                    // Write mask (can be obtained using the return value of getLockWord(), after being bitwise ANDed with "LWUSBCFG" [0x009F] and the resulting value cast to quint8)
     };
-    controlTransfer(SET, SET_USB_CONFIG, PROM_WRITE_KEY, 0x0000, controlBufferOut, static_cast<quint16>(sizeof(controlBufferOut)), errcnt, errstr);
+    controlTransfer(SET, SET_USB_CONFIG, PROM_WRITE_KEY, 0x0000, controlBufferOut, SET_USB_CONFIG_WLEN, errcnt, errstr);
 }
 
 // Helper function to list devices
