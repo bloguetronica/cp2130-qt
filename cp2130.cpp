@@ -553,7 +553,7 @@ CP2130::PROMConfig CP2130::getPROMConfig(int &errcnt, QString &errstr)
     for (size_t i = 0; i < PROM_BLOCKS; ++i) {
         unsigned char controlBufferIn[GET_PROM_CONFIG_WLEN];
         controlTransfer(GET, GET_PROM_CONFIG, 0x0000, static_cast<quint16>(i), controlBufferIn, GET_PROM_CONFIG_WLEN, errcnt, errstr);
-        for (size_t j = 0; j < GET_PROM_CONFIG_WLEN; ++j) {
+        for (size_t j = 0; j < PROM_BLOCK_SIZE; ++j) {
             config.blocks[i][j] = controlBufferIn[j];
         }
     }
@@ -969,7 +969,7 @@ void CP2130::writePROMConfig(const PROMConfig &config, int &errcnt, QString &err
 {
     for (size_t i = 0; i < PROM_BLOCKS; ++i) {
         unsigned char controlBufferOut[SET_PROM_CONFIG_WLEN];
-        for (size_t j = 0; j < SET_PROM_CONFIG_WLEN; ++j) {
+        for (size_t j = 0; j < PROM_BLOCK_SIZE; ++j) {
             controlBufferOut[j] = config.blocks[i][j];
         }
         controlTransfer(SET, SET_PROM_CONFIG, PROM_WRITE_KEY, static_cast<quint16>(i), controlBufferOut, SET_PROM_CONFIG_WLEN, errcnt, errstr);
