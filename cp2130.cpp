@@ -678,7 +678,7 @@ int CP2130::open(quint16 vid, quint16 pid, const QString &serial)
             if (serial.isNull()) {  // Note that serial, by omission, is a null QString
                 handle_ = libusb_open_device_with_vid_pid(context_, vid, pid);  // If no serial number is specified, this will open the first device found with matching VID and PID
             } else {
-                handle_ = libusb_open_device_with_vid_pid_serial(context_, vid, pid, reinterpret_cast<unsigned char *>(serial.toLocal8Bit().data()));
+                handle_ = libusb_open_device_with_vid_pid_serial(context_, vid, pid, reinterpret_cast<unsigned char *>(serial.toLatin1().data()));
             }
             if (handle_ == nullptr) {  // If the previous operation fails to get a device handle
                 libusb_exit(context_);  // Deinitialize libusb
@@ -1026,7 +1026,7 @@ QStringList CP2130::listDevices(quint16 vid, quint16 pid, int &errcnt, QString &
                         unsigned char str_desc[256];
                         libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, str_desc, static_cast<int>(sizeof(str_desc)));  // Get the serial number string in ASCII format
                         QString serial;
-                        devices += serial.fromLocal8Bit(reinterpret_cast<char *>(str_desc));  // Append the serial number string to the list
+                        devices += serial.fromLatin1(reinterpret_cast<char *>(str_desc));  // Append the serial number string to the list
                         libusb_close(handle);  // Close the device
                     }
                 }
