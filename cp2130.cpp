@@ -1025,8 +1025,7 @@ QStringList CP2130::listDevices(quint16 vid, quint16 pid, int &errcnt, QString &
                     if (libusb_open(devs[i], &handle) == 0) {  // Open the listed device. If successfull
                         unsigned char str_desc[256];
                         libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, str_desc, static_cast<int>(sizeof(str_desc)));  // Get the serial number string in ASCII format
-                        QString serial;
-                        devices += serial.fromLatin1(reinterpret_cast<char *>(str_desc));  // Append the serial number string to the list
+                        devices += reinterpret_cast<char *>(str_desc);  // Append the serial number string to the list
                         libusb_close(handle);  // Close the device
                     }
                 }
