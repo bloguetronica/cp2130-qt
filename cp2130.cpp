@@ -740,11 +740,11 @@ void CP2130::setClockDivider(quint8 value, int &errcnt, QString &errstr)
 // Sets the event counter
 void CP2130::setEventCounter(const EventCounter &evcntr, int &errcnt, QString &errstr)
 {
-    unsigned char controlBufferOut[GET_EVENT_COUNTER_WLEN] = {
+    unsigned char controlBufferOut[SET_EVENT_COUNTER_WLEN] = {
         static_cast<quint8>(0x07 & evcntr.mode),                                   // Set GPIO.4/EVTCNTR pin mode
         static_cast<quint8>(evcntr.value >> 8), static_cast<quint8>(evcntr.value)  // Set the event count value
     };
-    controlTransfer(SET, SET_EVENT_COUNTER, 0x0000, 0x0000, controlBufferOut, GET_EVENT_COUNTER_WLEN, errcnt, errstr);
+    controlTransfer(SET, SET_EVENT_COUNTER, 0x0000, 0x0000, controlBufferOut, SET_EVENT_COUNTER_WLEN, errcnt, errstr);
 }
 
 // Sets the full FIFO threshold
@@ -851,13 +851,14 @@ QVector<quint8> CP2130::spiRead(quint32 bytesToRead, quint8 endpointInAddr, quin
     int bytesWritten;
     bulkTransfer(endpointOutAddr, readCommandBuffer, static_cast<int>(sizeof(readCommandBuffer)), &bytesWritten, errcnt, errstr);
 #endif
-    unsigned char readInputBuffer[bytesToRead];
+    unsigned char *readInputBuffer = new unsigned char[bytesToRead];  // Allocated dynamically since version 2.1.0
     int bytesRead = 0;  // Important!
-    bulkTransfer(endpointInAddr, readInputBuffer, static_cast<int>(sizeof(readInputBuffer)), &bytesRead, errcnt, errstr);
+    bulkTransfer(endpointInAddr, readInputBuffer, bytesToRead, &bytesRead, errcnt, errstr);
     QVector<quint8> retdata(bytesRead);
     for (int i = 0; i < bytesRead; ++i) {
         retdata[i] = readInputBuffer[i];
     }
+    delete[] readInputBuffer;
     return retdata;
 }
 
@@ -872,7 +873,8 @@ QVector<quint8> CP2130::spiRead(quint32 bytesToRead, int &errcnt, QString &errst
 void CP2130::spiWrite(const QVector<quint8> &data, quint8 endpointOutAddr, int &errcnt, QString &errstr)
 {
     quint32 bytesToWrite = static_cast<quint32>(data.size());  // Conversion done for sanity purposes
-    unsigned char writeCommandBuffer[bytesToWrite + 8] = {
+    int bufsize = bytesToWrite + 8;
+    unsigned char *writeCommandBuffer = new unsigned char[bufsize] {  // Allocated dynamically since version 2.1.0
         0x00, 0x00,     // Reserved
         CP2130::WRITE,  // Write command
         0x00,           // Reserved
@@ -885,11 +887,12 @@ void CP2130::spiWrite(const QVector<quint8> &data, quint8 endpointOutAddr, int &
         writeCommandBuffer[i + 8] = data[i];
     }
 #if LIBUSB_API_VERSION >= 0x01000105
-    bulkTransfer(endpointOutAddr, writeCommandBuffer, static_cast<int>(sizeof(writeCommandBuffer)), nullptr, errcnt, errstr);
+    bulkTransfer(endpointOutAddr, writeCommandBuffer, bufsize, nullptr, errcnt, errstr);
 #else
     int bytesWritten;
-    bulkTransfer(endpointOutAddr, writeCommandBuffer, static_cast<int>(sizeof(writeCommandBuffer)), &bytesWritten, errcnt, errstr);
+    bulkTransfer(endpointOutAddr, writeCommandBuffer, bufsize, &bytesWritten, errcnt, errstr);
 #endif
+    delete[] writeCommandBuffer;
 }
 
 // This function is a shorthand version of the previous one (the endpoint OUT address is automatically deduced at the cost of decreased speed)
