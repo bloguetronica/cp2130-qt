@@ -28,7 +28,7 @@ extern "C" {
 // Definitions
 const unsigned int TR_TIMEOUT = 500;  // Transfer timeout in milliseconds (increased to 500ms since version 2.0.2)
 
-// Specific to getDescGeneric() and writeDescGeneric()
+// Specific to getDescGeneric() and writeDescGeneric() (added in version 2.1.0)
 const quint16 DESC_TBLSIZE = 0x0040;           // Descriptor table size, including preamble [64]
 const size_t DESC_MAXIDX = DESC_TBLSIZE - 2;   // Maximum usable index [62]
 const size_t DESC_IDXINCR = DESC_TBLSIZE - 1;  // Index increment or step between table preambles [63]
@@ -38,12 +38,12 @@ QString CP2130::getDescGeneric(quint8 command, int &errcnt, QString &errstr)
 {
     unsigned char controlBufferIn[DESC_TBLSIZE];
     controlTransfer(GET, command, 0x0000, 0x0000, controlBufferIn, DESC_TBLSIZE, errcnt, errstr);
-    QString product;
+    QString descriptor;
     size_t length = controlBufferIn[0];
     size_t end = length > DESC_MAXIDX ? DESC_MAXIDX : length;
     for (size_t i = 2; i < end; i += 2) {  // Process first 30 characters (bytes 2-61 of the array)
         if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Filter out null characters
-            product += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
+            descriptor += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
         }
     }
     if ((command == GET_MANUFACTURING_STRING_1 || command == GET_PRODUCT_STRING_1) && length > DESC_MAXIDX) {
@@ -51,16 +51,16 @@ QString CP2130::getDescGeneric(quint8 command, int &errcnt, QString &errstr)
         controlTransfer(GET, command + 2, 0x0000, 0x0000, controlBufferIn, DESC_TBLSIZE, errcnt, errstr);
         midchar = static_cast<quint16>(controlBufferIn[0] << 8 | midchar);  // Reconstruct the char in the middle
         if (midchar != 0x0000) {  // Filter out the reconstructed char if the same is null
-            product += QChar(midchar);
+            descriptor += QChar(midchar);
         }
         end = length - DESC_IDXINCR;
         for (size_t i = 1; i < end; i += 2) {  // Process remaining characters, up to 31 (bytes 1-62 of the array)
             if (controlBufferIn[i] != 0 || controlBufferIn[i + 1] != 0) {  // Again, filter out null characters
-                product += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
+                descriptor += QChar(controlBufferIn[i + 1] << 8 | controlBufferIn[i]);  // UTF-16LE conversion as per the USB 2.0 specification
             }
         }
     }
-    return product;
+    return descriptor;
 }
 
 // Private generic procedure used to write any descriptor (added as a refactor in version 2.1.0)
