@@ -969,8 +969,7 @@ void CP2130::writeLockWord(quint16 word, int &errcnt, QString &errstr)
 // Writes the manufacturer descriptor to the CP2130 OTP ROM
 void CP2130::writeManufacturerDesc(const QString &manufacturer, int &errcnt, QString &errstr)
 {
-    size_t strsize = static_cast<size_t>(manufacturer.size());
-    if (strsize > DESCMXL_MANUFACTURER) {
+    if (static_cast<size_t>(manufacturer.size()) > DESCMXL_MANUFACTURER) {
         ++errcnt;
         errstr += QObject::tr("In writeManufacturerDesc(): manufacturer descriptor string cannot be longer than 62 characters.\n");  // Program logic error
     } else {
@@ -1005,8 +1004,7 @@ void CP2130::writePinConfig(const PinConfig &config, int &errcnt, QString &errst
 // Writes the product descriptor to the CP2130 OTP ROM
 void CP2130::writeProductDesc(const QString &product, int &errcnt, QString &errstr)
 {
-    size_t strsize = static_cast<size_t>(product.size());
-    if (strsize > DESCMXL_PRODUCT) {
+    if (static_cast<size_t>(product.size()) > DESCMXL_PRODUCT) {
         ++errcnt;
         errstr += QObject::tr("In writeProductDesc(): product descriptor string cannot be longer than 62 characters.\n");  // Program logic error
     } else {
@@ -1029,8 +1027,7 @@ void CP2130::writePROMConfig(const PROMConfig &config, int &errcnt, QString &err
 // Writes the serial descriptor to the CP2130 OTP ROM
 void CP2130::writeSerialDesc(const QString &serial, int &errcnt, QString &errstr)
 {
-    size_t strsize = static_cast<size_t>(serial.size());
-    if (strsize > DESCMXL_SERIAL) {
+    if (static_cast<size_t>(serial.size()) > DESCMXL_SERIAL) {
         ++errcnt;
         errstr += QObject::tr("In writeSerialDesc(): serial descriptor string cannot be longer than 30 characters.\n");  // Program logic error
     } else {
