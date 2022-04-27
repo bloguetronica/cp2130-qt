@@ -66,7 +66,7 @@ QString CP2130::getDescGeneric(quint8 command, int &errcnt, QString &errstr)
 // Private generic procedure used to write any descriptor (added as a refactor in version 2.1.0)
 void CP2130::writeDescGeneric(const QString &descriptor, quint8 command, int &errcnt, QString &errstr)
 {
-    size_t length = 2 * descriptor.size() + 2;
+    size_t length = static_cast<size_t>(2 * descriptor.size() + 2);  // Fixed in version 2.2.2
     unsigned char controlBufferOut[DESC_TBLSIZE] = {  // It is important to initialize the array in this manner, here, so that the remaining indexes are filled with zeros!
         static_cast<quint8>(length),  // USB string descriptor length
         0x03                          // USB string descriptor constant
@@ -934,8 +934,9 @@ QVector<quint8> CP2130::spiWriteRead(const QVector<quint8> &data, quint8 endpoin
         unsigned char *writeReadInputBuffer = new unsigned char[payload];
         int bytesRead = 0;  // Important!
         bulkTransfer(endpointInAddr, writeReadInputBuffer, payload, &bytesRead, errcnt, errstr);
+        retdata.resize(bytesRead);  // Optimization implemented in version 2.2.2
         for (int i = 0; i < bytesRead; ++i) {
-            retdata += writeReadInputBuffer[i];
+            retdata[i] = writeReadInputBuffer[i];  // Note that the values are no longer appended to the QVector since version 2.2.2, because it is more efficient to resize the QVector just once (see above), so that the values can be simply assigned
         }
         delete[] writeReadInputBuffer;
         bytesLeft -= payload;
