@@ -670,37 +670,38 @@ void CP2130::lockOTP(int &errcnt, QString &errstr)
 // Since version 2.1.0, it is not required to specify a serial number
 int CP2130::open(quint16 vid, quint16 pid, const QString &serial)
 {
-    int retval = SUCCESS;
-    if (!isOpen()) {  // Just in case the calling algorithm tries to open a device that was already sucessfully open, or tries to open different devices concurrently, all while using (or referencing to) the same object
-        if (libusb_init(&context_) != 0) {  // Initialize libusb. In case of failure
-            retval = ERROR_INIT;
-        } else {  // If libusb is initialized
-            if (serial.isNull()) {  // Note that serial, by omission, is a null QString
-                handle_ = libusb_open_device_with_vid_pid(context_, vid, pid);  // If no serial number is specified, this will open the first device found with matching VID and PID
+    int retval;
+    if (isOpen()) {  // Just in case the calling algorithm tries to open a device that was already sucessfully open, or tries to open different devices concurrently, all while using (or referencing to) the same object
+        retval = SUCCESS;
+    } else if (libusb_init(&context_) != 0) {  // Initialize libusb. In case of failure
+        retval = ERROR_INIT;
+    } else {  // If libusb is initialized
+        if (serial.isNull()) {  // Note that serial, by omission, is a null QString
+            handle_ = libusb_open_device_with_vid_pid(context_, vid, pid);  // If no serial number is specified, this will open the first device found with matching VID and PID
+        } else {
+            handle_ = libusb_open_device_with_vid_pid_serial(context_, vid, pid, reinterpret_cast<unsigned char *>(serial.toLatin1().data()));
+        }
+        if (handle_ == nullptr) {  // If the previous operation fails to get a device handle
+            libusb_exit(context_);  // Deinitialize libusb
+            retval = ERROR_NOT_FOUND;
+        } else {  // If the device is successfully opened and a handle obtained
+            if (libusb_kernel_driver_active(handle_, 0) == 1) {  // If a kernel driver is active on the interface
+                libusb_detach_kernel_driver(handle_, 0);  // Detach the kernel driver
+                kernelWasAttached_ = true;  // Flag that the kernel driver was attached
             } else {
-                handle_ = libusb_open_device_with_vid_pid_serial(context_, vid, pid, reinterpret_cast<unsigned char *>(serial.toLatin1().data()));
+                kernelWasAttached_ = false;  // The kernel driver was not attached
             }
-            if (handle_ == nullptr) {  // If the previous operation fails to get a device handle
+            if (libusb_claim_interface(handle_, 0) != 0) {  // Claim the interface. In case of failure
+                if (kernelWasAttached_) {  // If a kernel driver was attached to the interface before
+                    libusb_attach_kernel_driver(handle_, 0);  // Reattach the kernel driver
+                }
+                libusb_close(handle_);  // Close the device
                 libusb_exit(context_);  // Deinitialize libusb
-                retval = ERROR_NOT_FOUND;
-            } else {  // If the device is successfully opened and a handle obtained
-                if (libusb_kernel_driver_active(handle_, 0) == 1) {  // If a kernel driver is active on the interface
-                    libusb_detach_kernel_driver(handle_, 0);  // Detach the kernel driver
-                    kernelWasAttached_ = true;  // Flag that the kernel driver was attached
-                } else {
-                    kernelWasAttached_ = false;  // The kernel driver was not attached
-                }
-                if (libusb_claim_interface(handle_, 0) != 0) {  // Claim the interface. In case of failure
-                    if (kernelWasAttached_) {  // If a kernel driver was attached to the interface before
-                        libusb_attach_kernel_driver(handle_, 0);  // Reattach the kernel driver
-                    }
-                    libusb_close(handle_);  // Close the device
-                    libusb_exit(context_);  // Deinitialize libusb
-                    handle_ = nullptr;  // Required to mark the device as closed
-                    retval = ERROR_BUSY;
-                } else {
-                    disconnected_ = false;  // Note that this flag is never assumed to be true for a device that was never opened - See constructor for details!
-                }
+                handle_ = nullptr;  // Required to mark the device as closed
+                retval = ERROR_BUSY;
+            } else {
+                disconnected_ = false;  // Note that this flag is never assumed to be true for a device that was never opened - See constructor for details!
+                retval = SUCCESS;
             }
         }
     }
